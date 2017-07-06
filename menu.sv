@@ -146,7 +146,7 @@ pll pll
 //
 // Helper functionality:
 //    SDRAM and DDR3 RAM are being cleared while this core is working.
-//    some cores behave incorrectly if started with non-cleared RAM.
+//    some cores behave incorrectly if started with non-clean RAM.
 
 sdram sdr
 (
@@ -164,25 +164,20 @@ sdram sdr
 ddram ddr
 (
 	.*,
+	.reset(RESET),
    .dout(),
    .din(0),
    .rd(0),
    .ready()
 );
 
-reg        reset;
 reg        we;
 reg [27:0] addr = 0;
 
 always @(posedge clk_sys) begin
-	integer   init = 5000000;
 	reg [4:0] cnt = 9;
 	
-	if(init) begin
-		init <= init - 1;
-		reset <= 1;
-	end else begin
-		reset <= 0;
+	if(~RESET) begin
 		cnt <= cnt + 1'b1;
 		we <= &cnt;
 		if(cnt == 8) addr <= addr + 1'd1;
