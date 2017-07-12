@@ -10,9 +10,6 @@ module  pll_hdmi_0002(
 	// interface 'outclk0'
 	output wire outclk_0,
 
-	// interface 'outclk1'
-	output wire outclk_1,
-
 	// interface 'locked'
 	output wire locked
 );
@@ -21,11 +18,11 @@ module  pll_hdmi_0002(
 		.fractional_vco_multiplier("true"),
 		.reference_clock_frequency("50.0 MHz"),
 		.operation_mode("direct"),
-		.number_of_clocks(2),
-		.output_clock_frequency0("74.249999 MHz"),
+		.number_of_clocks(1),
+		.output_clock_frequency0("74.250000 MHz"),
 		.phase_shift0("0 ps"),
 		.duty_cycle0(50),
-		.output_clock_frequency1("556.874992 MHz"),
+		.output_clock_frequency1("0 MHz"),
 		.phase_shift1("0 ps"),
 		.duty_cycle1(50),
 		.output_clock_frequency2("0 MHz"),
@@ -80,7 +77,7 @@ module  pll_hdmi_0002(
 		.pll_subtype("General")
 	) altera_pll_i (
 		.rst	(rst),
-		.outclk	({outclk_1, outclk_0}),
+		.outclk	({outclk_0}),
 		.locked	(locked),
 		.fboutclk	( ),
 		.fbclk	(1'b0),
