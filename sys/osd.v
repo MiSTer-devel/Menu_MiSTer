@@ -25,13 +25,13 @@ localparam OSD_HEIGHT   = 12'd64;
 // this core supports only the display related OSD commands
 // of the minimig v1
 reg osd_enable;
-(* ramstyle = "no_rw_check" *) reg  [7:0] osd_buffer[4096];  // the OSD buffer itself
+(* ramstyle = "no_rw_check" *) reg  [7:0] osd_buffer[4096+1024];  // the OSD buffer itself
 
 reg highres = 0;
 
 // the OSD has its own SPI interface to the io controller
 always@(posedge clk_sys) begin
-	reg [11:0] bcnt;
+	reg [12:0] bcnt;
 	reg  [7:0] cmd;
 	reg        has_cmd;
 	reg        old_strobe;
@@ -51,11 +51,11 @@ always@(posedge clk_sys) begin
 					osd_enable <= io_din[0];
 					if(!io_din[0]) highres <= 0;
 				end
-				bcnt <= {io_din[3:0], 8'h00};
+				bcnt <= {io_din[4:0], 8'h00};
 				if(io_din[7:3] == 5'b00101) highres <= 1;
 			end else begin
 				// command 0x20: OSDCMDWRITE
-				if(cmd[7:4] == 4'b0010) begin
+				if(cmd[7:5] == 3'b001) begin
 					osd_buffer[bcnt] <= io_din;
 					bcnt <= bcnt + 1'd1;
 				end
@@ -93,7 +93,7 @@ reg   [7:0] osd_byte;
 reg  [21:0] osd_vcnt;
 reg  [21:0] fheight;
 
-wire [21:0] hrheight = (OSD_HEIGHT<<highres);
+wire [21:0] hrheight = ((OSD_HEIGHT<<highres)+32);
 
 always @(posedge clk_video) begin
 	reg       deD;
@@ -138,11 +138,12 @@ always @(posedge clk_video) begin
 			if(osd_div == multiscan) begin
 				osd_div <= 0;
 				osd_vcnt <= osd_vcnt + 1'd1;
+				if(osd_vcnt == 'b10011111) osd_vcnt <= 0;
 			end
-			if(v_osd_start == (v_cnt+1'b1)) {osd_div, osd_vcnt} <= 0;
+			if(v_osd_start == (v_cnt+1'b1)) {osd_div, osd_vcnt} <= 'b10000000;
 		end
 		
-		osd_byte <= osd_buffer[{osd_vcnt[6:3], osd_hcnt[7:0]}];
+		osd_byte <= osd_buffer[{osd_vcnt[7:3], osd_hcnt[7:0]}];
 	end
 end
 
@@ -155,6 +156,7 @@ wire [21:0] v_osd_end   = v_osd_start + fheight;
 wire [21:0] osd_hcnt    = h_cnt[21:0] - h_osd_start + 1'd1;
 
 wire osd_de = osd_enable &&
+				  (osd_vcnt[7:3] != 'b10011) &&
               (h_cnt >= h_osd_start) && (h_cnt < h_osd_end) &&
               (v_cnt >= v_osd_start) && (v_cnt < v_osd_end);
 
