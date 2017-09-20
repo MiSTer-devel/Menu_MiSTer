@@ -93,7 +93,7 @@ reg   [7:0] osd_byte;
 reg  [21:0] osd_vcnt;
 reg  [21:0] fheight;
 
-wire [21:0] hrheight = ((OSD_HEIGHT<<highres)+32);
+wire [21:0] hrheight = ((OSD_HEIGHT<<highres)+6'd32);
 
 always @(posedge clk_video) begin
 	reg       deD;
@@ -156,7 +156,7 @@ wire [21:0] v_osd_end   = v_osd_start + fheight;
 wire [21:0] osd_hcnt    = h_cnt[21:0] - h_osd_start + 1'd1;
 
 wire osd_de = osd_enable &&
-				  (osd_vcnt[7:3] != 'b10011) &&
+				  (!osd_vcnt[7] || ((osd_vcnt[6:0] >= 4) && (osd_vcnt[6:0] < 19))) &&
               (h_cnt >= h_osd_start) && (h_cnt < h_osd_end) &&
               (v_cnt >= v_osd_start) && (v_cnt < v_osd_end);
 
