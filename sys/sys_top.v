@@ -77,12 +77,21 @@ module sys_top
 	input         BTN_OSD,
 	input         BTN_RESET,
 
+	//////////// SDIO ///////////
+	inout   [3:0] SDIO_DAT,
+	inout         SDIO_CMD,
+	output        SDIO_CLK,
+	input         SDIO_CD,
+
 	////////// MB KEY ///////////
 	input   [1:0] KEY,
 
 	////////// MB LED ///////////
 	output  [7:0] LED
 );
+
+
+assign SDIO_DAT[2:1] = 2'bZZ;
 
 
 //////////////////////////  LEDs  ///////////////////////////////////////
@@ -225,6 +234,8 @@ always @(posedge FPGA_CLK2_50) begin
 	resetd2 <= resetd;
 end
 
+// 100MHz
+wire ctl_clk;
 
 ///////////////////////// VIP version  ///////////////////////////////
 
@@ -300,7 +311,6 @@ wire        ctl_write;
 wire [31:0] ctl_writedata;
 wire        ctl_waitrequest;
 wire        ctl_reset;
-wire        ctl_clk;
 wire  [7:0] ARX, ARY;
 
 vip_config vip_config
@@ -405,7 +415,7 @@ pattern_vg
 	.b_out(hdmi_data[7:0]),
 	.total_active_pix(H_TOTAL - (H_FP + H_BP + H_SYNC)),
 	.total_active_lines(INTERLACED ? (V_TOTAL_0 - (V_FP_0 + V_BP_0 + V_SYNC_0)) + (V_TOTAL_1 - (V_FP_1 + V_BP_1 + V_SYNC_1)) : (V_TOTAL_0 - (V_FP_0 + V_BP_0 + V_SYNC_0))), // originally: 13'd480
-	.pattern(5),
+	.pattern(patt),
 	.ramp_step(20'h0333)
 );
 
@@ -415,6 +425,7 @@ sysmem_lite sysmem
 	//Reset/Clock
 	.reset_reset_req(reset_req),
 	.reset_reset(reset),
+	.ctl_clock(ctl_clk),
 
 	//DE10-nano has no reset signal on GPIO, so core has to emulate cold reset button.
 	.reset_cold_req(~btn_reset),
@@ -590,6 +601,7 @@ wire        audio_s;
 wire  [7:0] r_out, g_out, b_out;
 wire        vs, hs, de;
 wire        clk_sys, clk_vid, ce_pix;
+wire  [2:0] patt;
 
 wire        ram_clk;
 wire [28:0] ram_address;
@@ -606,11 +618,15 @@ wire        led_user;
 wire  [1:0] led_power;
 wire  [1:0] led_disk;
 
+wire vs_emu, hs_emu;
+sync_fix sync_v(FPGA_CLK3_50, vs_emu, vs);
+sync_fix sync_h(FPGA_CLK3_50, hs_emu, hs);
+
 emu emu
 (
 	.CLK_50M(FPGA_CLK3_50),
 	.RESET(reset),
-	.HPS_BUS({io_wait, clk_sys, io_fpga, io_uio, io_strobe, io_wide, io_din, io_dout}),
+	.HPS_BUS({ctl_clk, clk_vid, ce_pix, de, hs, vs, io_wait, clk_sys, io_fpga, io_uio, io_strobe, io_wide, io_din, io_dout}),
 
 	.CLK_VIDEO(clk_vid),
 	.CE_PIXEL(ce_pix),
@@ -618,8 +634,8 @@ emu emu
 	.VGA_R(r_out),
 	.VGA_G(g_out),
 	.VGA_B(b_out),
-	.VGA_HS(hs),
-	.VGA_VS(vs),
+	.VGA_HS(hs_emu),
+	.VGA_VS(vs_emu),
 	.VGA_DE(de),
 
 	.LED_USER(led_user),
@@ -631,10 +647,24 @@ emu emu
 	.VIDEO_ARY(ARY),
 `endif
 
+	.PATTERN(patt),
+
 	.AUDIO_L(audio_l),
 	.AUDIO_R(audio_r),
 	.AUDIO_S(audio_s),
 	.TAPE_IN(0),
+
+	// SCK  -> CLK
+	// MOSI -> CMD
+	// MISO <- DAT0
+	//    Z -> DAT1
+	//    Z -> DAT2
+	// CS   -> DAT3
+
+	.SD_SCK(SDIO_CLK),
+	.SD_MOSI(SDIO_CMD),
+	.SD_MISO(SDIO_DAT[0]),
+	.SD_CS(SDIO_DAT[3]),
 
 	.DDRAM_CLK(ram_clk),
 	.DDRAM_ADDR(ram_address),
@@ -659,5 +689,34 @@ emu emu
 	.SDRAM_CLK(SDRAM_CLK),
 	.SDRAM_CKE(SDRAM_CKE)
 );
+
+endmodule
+
+module sync_fix
+(
+	input clk,
+	
+	input sync_in,
+	output sync_out
+);
+
+assign sync_out = sync_in ^ pol;
+
+reg pol;
+always @(posedge clk) begin
+	integer pos = 0, neg = 0, cnt = 0;
+	reg s1,s2;
+
+	s1 <= sync_in;
+	s2 <= s1;
+
+	if(~s2 & s1) neg <= cnt;
+	if(s2 & ~s1) pos <= cnt;
+
+	cnt <= cnt + 1;
+	if(s2 != s1) cnt <= 0;
+
+	pol <= pos > neg;
+end
 
 endmodule

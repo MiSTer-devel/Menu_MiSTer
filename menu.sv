@@ -29,7 +29,7 @@ module emu
 	input         RESET,
 
 	//Must be passed to hps_io module
-	inout  [37:0] HPS_BUS,
+	inout  [43:0] HPS_BUS,
 
 	//Base video clock. Usually equals to CLK_SYS.
 	output        CLK_VIDEO,
@@ -62,6 +62,14 @@ module emu
 	output        AUDIO_S, // 1 - signed audio samples, 0 - unsigned
 	input         TAPE_IN,
 
+	// SD-SPI
+	output        SD_SCK,
+	output        SD_MOSI,
+	input         SD_MISO,
+	output        SD_CS,
+	
+	output  [2:0] PATTERN,
+
 	//High latency DDR3 RAM interface
 	//Use for non-critical time purposes
 	output        DDRAM_CLK,
@@ -89,6 +97,8 @@ module emu
 	output        SDRAM_nWE
 );
 
+assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
+
 assign DDRAM_CLK = clk_sys;
 assign CE_PIXEL  = ce_pix;
 
@@ -115,6 +125,7 @@ localparam CONF_STR = {
 };
 
 wire forced_scandoubler;
+wire [64:0] ps2_key;
 
 hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 (
@@ -124,10 +135,29 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 	.conf_str(CONF_STR),
 	.forced_scandoubler(forced_scandoubler),
 
+	.ps2_key(ps2_key),
+
 	.ps2_kbd_led_use(0),
 	.ps2_kbd_led_status(0)
 );
 
+assign PATTERN = patt;
+reg [2:0] patt = 5;
+
+wire pressed    = (ps2_key[15:8] != 8'hf0);
+wire extended   = (~pressed ? (ps2_key[23:16] == 8'he0) : (ps2_key[15:8] == 8'he0));
+wire [8:0] code = ps2_key[63:24] ? 9'd0 : {extended, ps2_key[7:0]}; // filter out PRNSCR and PAUSE
+always @(posedge clk_sys) begin
+	reg old_state;
+	old_state <= ps2_key[64];
+	
+	if(old_state != ps2_key[64]) begin
+		if(code == 5 && ~pressed) begin
+			patt <= patt - 1'd1;
+			if(!patt) patt <= 5;
+		end
+	end
+end
 
 ////////////////////   CLOCKS   ///////////////////
 wire locked, clk_sys;
