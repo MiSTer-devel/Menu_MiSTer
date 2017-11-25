@@ -2,8 +2,9 @@
 module hdmi_config
 (
 	//	Host Side
-	input			iCLK,
-	input			iRST_N,
+	input       iCLK,
+	input       iRST_N,
+	input       HPD,    //Hot Plug Interrupt
 	
 	// 0 - 480i
 	// 1 - 480p
@@ -23,6 +24,8 @@ module hdmi_config
 	output		I2C_SCL,
 	inout 		I2C_SDA
 );
+
+wire restart_N = iRST_N & ~HPD; //Restart in case of Reset or Hot Plug Event
 
 //	Internal Registers/Wires
 reg        mI2C_GO = 0;
@@ -45,10 +48,10 @@ I2C_Controller #(50_000_000, 400_000) i2c_av
 );
 
 //////////////////////	Config Control	////////////////////////////
-always@(posedge iCLK or negedge iRST_N) begin
+always@(posedge iCLK or negedge restart_N) begin
 	reg  [1:0] mSetup_ST = 0;
 
-	if(!iRST_N) begin
+	if(!restart_N) begin
 		LUT_INDEX	<=	0;
 		mSetup_ST	<=	0;
 		mI2C_GO		<=	0;
@@ -175,14 +178,14 @@ wire [15:0] init_data[58] =
 
 	16'h7301,
 
-	16'h9400,					// HPD Interrupt disabled.
+	16'h9480,					// HPD Interrupt enabled.
 
 	16'h9902,					// ADI required Write.
 	16'h9B18,					// ADI required Write.
 
 	16'h9F00,					// ADI required Write.
 
-	{8'hA1, 8'b0100_0000},	// [6]=1 Monitor Sense Power Down DISabled.
+	{8'hA1, 8'b0000_0000},	// [6]=1 Monitor Sense Power Down DISabled.
 	
 	16'hA408,					// ADI required Write.
 	16'hA504,					// ADI required Write.
@@ -214,7 +217,7 @@ wire [15:0] init_data[58] =
 					
 	16'hBB00,					// ADI required Write.
 	
-	{8'hD6, 8'b1100_0000},	// [7:6] HPD Control...
+	{8'hD6, 8'b1000_0000},	// [7:6] HPD Control...
 									// 00 = HPD is from both HPD pin or CDC HPD
 									// 01 = HPD is from CDC HPD
 									// 10 = HPD is from HPD pin

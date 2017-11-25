@@ -53,6 +53,8 @@ module sys_top
 	output [23:0] HDMI_TX_D,
 	output        HDMI_TX_HS,
 	output        HDMI_TX_VS,
+	
+	input         HDMI_TX_INT, //Hot PLug
 
 	//////////// SDR ///////////
 	output [12:0] SDRAM_A,
@@ -403,7 +405,7 @@ pattern_vg
 	.b_out(hdmi_data[7:0]),
 	.total_active_pix(H_TOTAL - (H_FP + H_BP + H_SYNC)),
 	.total_active_lines(INTERLACED ? (V_TOTAL_0 - (V_FP_0 + V_BP_0 + V_SYNC_0)) + (V_TOTAL_1 - (V_FP_1 + V_BP_1 + V_SYNC_1)) : (V_TOTAL_0 - (V_FP_0 + V_BP_0 + V_SYNC_0))), // originally: 13'd480
-	.pattern(4),
+	.pattern(5),
 	.ramp_step(20'h0333)
 );
 
@@ -461,6 +463,8 @@ hdmi_config hdmi_config
 (
 	.iCLK(FPGA_CLK1_50),
 	.iRST_N(cfg_ready),
+	.HPD(HDMI_TX_INT), //Hot Plug
+
 	.I2C_SCL(HDMI_I2C_SCL),
 	.I2C_SDA(HDMI_I2C_SDA),
 
