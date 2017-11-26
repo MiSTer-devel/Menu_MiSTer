@@ -474,7 +474,7 @@ hdmi_config hdmi_config
 (
 	.iCLK(FPGA_CLK1_50),
 	.iRST_N(cfg_ready),
-	.HPD(HDMI_TX_INT), //Hot Plug
+	.HPD(HDMI_TX_INT | reset_hdmi), //Hot Plug
 
 	.I2C_SCL(HDMI_I2C_SCL),
 	.I2C_SDA(HDMI_I2C_SDA),
@@ -602,6 +602,7 @@ wire  [7:0] r_out, g_out, b_out;
 wire        vs, hs, de;
 wire        clk_sys, clk_vid, ce_pix;
 wire  [2:0] patt;
+wire        reset_hdmi;
 
 wire        ram_clk;
 wire [28:0] ram_address;
@@ -626,6 +627,7 @@ emu emu
 (
 	.CLK_50M(FPGA_CLK3_50),
 	.RESET(reset),
+	.RESET_OUT(reset_hdmi),
 	.HPS_BUS({ctl_clk, clk_vid, ce_pix, de, hs, vs, io_wait, clk_sys, io_fpga, io_uio, io_strobe, io_wide, io_din, io_dout}),
 
 	.CLK_VIDEO(clk_vid),

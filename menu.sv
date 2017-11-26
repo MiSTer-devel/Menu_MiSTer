@@ -27,6 +27,7 @@ module emu
 	//Async reset from top-level module.
 	//Can be used as initial reset.
 	input         RESET,
+	output        RESET_OUT,
 
 	//Must be passed to hps_io module
 	inout  [43:0] HPS_BUS,
@@ -126,6 +127,7 @@ localparam CONF_STR = {
 
 wire forced_scandoubler;
 wire [64:0] ps2_key;
+wire  [1:0] buttons;
 
 hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 (
@@ -136,10 +138,13 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 	.forced_scandoubler(forced_scandoubler),
 
 	.ps2_key(ps2_key),
+	.buttons(buttons),
 
 	.ps2_kbd_led_use(0),
 	.ps2_kbd_led_status(0)
 );
+
+assign RESET_OUT = buttons[1];
 
 assign PATTERN = patt;
 reg [2:0] patt = 5;
