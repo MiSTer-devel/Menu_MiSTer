@@ -59,11 +59,11 @@ always @(posedge clk_in)
 		den_out <= dn_in;
 	if (reset)
 		ramp_values <= 0;
-	else if (pattern == 0) // no pattern
+	else if ((pattern == 0) && &x[1:0])
 	begin
-		r_out <= r_in;
-		g_out <= g_in;
-		b_out <= b_in;
+		r_out <= comp_v;
+		g_out <= comp_v;
+		b_out <= comp_v;
 	end
 	else if (pattern == 1) // border
 	begin
@@ -130,11 +130,11 @@ always @(posedge clk_in)
 		else if (dn_in)
 			ramp_values <= ramp_values + ramp_step;
 	end
-	else if ((pattern == 5) && &x[1:0])
+	else if(pattern == 5)
 	begin
-		r_out <= comp_v;
-		g_out <= comp_v;
-		b_out <= comp_v;
+		r_out <= r_in;
+		g_out <= g_in;
+		b_out <= b_in;
 	end
 end
 
