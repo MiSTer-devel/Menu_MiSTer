@@ -1,5 +1,5 @@
 //============================================================================
-// 
+//
 //  Menu startup core for DE10-nano board. 
 //  Copyright (C) 2017 Sorgelig
 //
@@ -68,7 +68,7 @@ module emu
 	output        SD_MOSI,
 	input         SD_MISO,
 	output        SD_CS,
-	
+
 	output  [2:0] PATTERN,
 
 	//High latency DDR3 RAM interface
@@ -195,7 +195,7 @@ reg [27:0] addr = 0;
 
 always @(posedge clk_sys) begin
 	reg [4:0] cnt = 9;
-	
+
 	if(~RESET) begin
 		cnt <= cnt + 1'b1;
 		we <= &cnt;
@@ -232,7 +232,7 @@ always @(negedge CLK_VIDEO) begin
 		end else begin
 			hc <= hc + 1'd1;
 		end
-		
+
 		rnd_reg <= rnd;
 	end
 end
