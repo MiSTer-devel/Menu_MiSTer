@@ -2,8 +2,7 @@ module pattern_vg
 #(
 	parameter B=8, // number of bits per channel
 	X_BITS=13,
-	Y_BITS=13,
-	FRACTIONAL_BITS = 12
+	Y_BITS=13
 )
 
 (
@@ -16,50 +15,38 @@ module pattern_vg
 	output reg [B-1:0] r_out, g_out, b_out,
 	input wire [X_BITS-1:0] total_active_pix,
 	input wire [Y_BITS-1:0] total_active_lines,
-	input wire [7:0] pattern,
-	input wire [B+FRACTIONAL_BITS-1:0] ramp_step
+	input wire [7:0] pattern
 );
 	
-reg [B+FRACTIONAL_BITS-1:0] ramp_values; // 12-bit fractional end for ramp values
+wire [Y_BITS+2:0] bar  = {y,3'b000}/total_active_lines;
+wire [X_BITS+7:0] ramp = {x,8'h00}/total_active_pix;
 
-
-//wire bar_0 = y<90;
-wire bar_1 = y>=90 & y<180;
-wire bar_2 = y>=180 & y<270;
-wire bar_3 = y>=270 & y<360;
-wire bar_4 = y>=360 & y<450;
-wire bar_5 = y>=450 & y<540;
-wire bar_6 = y>=540 & y<630;
-wire bar_7 = y>=630 & y<720;
-
-
-wire red_enable = bar_1 | bar_3 | bar_5 | bar_7;
-wire green_enable = bar_2 | bar_3 | bar_6 | bar_7;
-wire blue_enable = bar_4 | bar_5 | bar_6 | bar_7;
+wire [X_BITS+9:0] cosx = {y,10'd0}/total_active_lines;
 
 wire [63:0] rnd;
 reg   [5:0] rnd_reg;
 wire  [5:0] rnd_c = {rnd[0],rnd[1],rnd[2],rnd[2],rnd[2],rnd[2]};
 reg   [9:0] vvc;
 wire  [7:0] cos_out;
-wire  [5:0] cos_g = {1'b1, cos_out[7:3]};
+reg   [5:0] cos_g;
 
 lfsr random(rnd);
-cos cos(vvc + {y[8:1], 2'b00}, cos_out);
+cos cos(vvc + cosx[9:0], cos_out);
 
 wire [7:0] comp_v = (cos_g >= rnd_reg) ? {cos_g - rnd_reg, 2'b00} : 8'd0;
 
-always @(posedge clk_in)
-	begin
-		if(!x && !y) vvc <= vvc + 9'd6;
-		if(x[1:0] == 0) rnd_reg <= rnd_c;
+always @(posedge clk_in) begin
 
-		vn_out <= vn_in;
-		hn_out <= hn_in;
-		den_out <= dn_in;
-	if (reset)
-		ramp_values <= 0;
-	else if ((pattern == 0) && &x[1:0])
+	if(!x && !y) vvc <= vvc + 9'd6;
+	if(!x) cos_g <= {1'b1, cos_out[7:3]};
+
+	if(x[1:0] == 0) rnd_reg <= rnd_c;
+
+	vn_out <= vn_in;
+	hn_out <= hn_in;
+	den_out <= dn_in;
+
+	if ((pattern == 0) && &x[1:0])
 	begin
 		r_out <= comp_v;
 		g_out <= comp_v;
@@ -119,16 +106,9 @@ always @(posedge clk_in)
 	end
 	else if (pattern == 4) // Simple RAMP
 	begin
-		r_out <= (red_enable) ? ramp_values[B+FRACTIONAL_BITS-1:FRACTIONAL_BITS] : 8'h00;
-		g_out <= (green_enable) ? ramp_values[B+FRACTIONAL_BITS-1:FRACTIONAL_BITS] : 8'h00;
-		b_out <= (blue_enable) ? ramp_values[B+FRACTIONAL_BITS-1:FRACTIONAL_BITS] : 8'h00;
-		
-		if ((x == total_active_pix - 1) && (dn_in))
-			ramp_values <= 0;
-		else if ((x == 0) && (dn_in))
-			ramp_values <= ramp_step;
-		else if (dn_in)
-			ramp_values <= ramp_values + ramp_step;
+		r_out <= (bar[0]) ? ramp[7:0] : 8'h00;
+		g_out <= (bar[1]) ? ramp[7:0] : 8'h00;
+		b_out <= (bar[2]) ? ramp[7:0] : 8'h00;
 	end
 	else if(pattern == 5)
 	begin

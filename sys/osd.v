@@ -12,7 +12,8 @@ module osd
 	input         clk_video,
 	input  [23:0] din,
 	output [23:0] dout,
-	input         de
+	input         de_in,
+	output reg    de_out
 );
 
 parameter  OSD_COLOR    =  3'd4;
@@ -71,15 +72,15 @@ always @(negedge clk_video) begin
 	reg deD;
 
 	cnt <= cnt + 1;
-	deD <= de;
+	deD <= de_in;
 
 	pixcnt <= pixcnt + 1;
 	if(pixcnt == pixsz) pixcnt <= 0;
 	ce_pix <= !pixcnt;
 
-	if(~deD && de) cnt <= 0;
+	if(~deD && de_in) cnt <= 0;
 
-	if(deD && ~de) begin
+	if(deD && ~de_in) begin
 		pixsz  <= (((cnt+1'b1) >> 9) > 1) ? (((cnt+1'b1) >> 9) - 1) : 0;
 		pixcnt <= 0;
 	end
@@ -93,7 +94,7 @@ reg   [7:0] osd_byte;
 reg  [21:0] osd_vcnt;
 reg  [21:0] fheight;
 
-wire [21:0] hrheight = ((OSD_HEIGHT<<highres)+6'd32);
+wire [21:0] hrheight = (OSD_HEIGHT<<highres)+6'd32;
 
 always @(posedge clk_video) begin
 	reg       deD;
@@ -102,14 +103,14 @@ always @(posedge clk_video) begin
 	
 	if(ce_pix) begin
 
-		deD <= de;
+		deD <= de_in;
 		if(~&h_cnt) h_cnt <= h_cnt + 1'd1;
 
 		// falling edge of de
-		if(!de && deD) dsp_width <= h_cnt[21:0];
+		if(!de_in && deD) dsp_width <= h_cnt[21:0];
 
 		// rising edge of de
-		if(de && !deD) begin
+		if(de_in && !deD) begin
 			v_cnt <= v_cnt + 1'd1;
 			if(h_cnt > {dsp_width, 2'b00}) begin
 				v_cnt <= 0;
@@ -156,15 +157,29 @@ wire [21:0] v_osd_end   = v_osd_start + fheight;
 wire [21:0] osd_hcnt    = h_cnt[21:0] - h_osd_start + 1'd1;
 
 wire osd_de = osd_enable &&
-				  (!osd_vcnt[7] || ((osd_vcnt[6:0] >= 4) && (osd_vcnt[6:0] < 19))) &&
+				  (!osd_vcnt[7] || ((osd_vcnt[6:0] >= 4) && (osd_vcnt[6:0] < 19) && highres)) &&
               (h_cnt >= h_osd_start) && (h_cnt < h_osd_end) &&
               (v_cnt >= v_osd_start) && (v_cnt < v_osd_end);
 
 wire osd_pixel = osd_byte[osd_vcnt[2:0]];
 
 
-assign dout = !osd_de ? din : {{osd_pixel, osd_pixel, OSD_COLOR[2], din[23:19]},
+//
+//
+// Pipeline one cycle to improve timing
+//
+//assign dout = !osd_de ? din : {{osd_pixel, osd_pixel, OSD_COLOR[2], din[23:19]},
+//                               {osd_pixel, osd_pixel, OSD_COLOR[1], din[15:11]},
+//                               {osd_pixel, osd_pixel, OSD_COLOR[0], din[7:3]}};
+
+reg [23:0] rdout;
+assign dout = rdout;
+									 
+always @(posedge clk_video) begin
+	rdout <= !osd_de ? din : {{osd_pixel, osd_pixel, OSD_COLOR[2], din[23:19]},
                                {osd_pixel, osd_pixel, OSD_COLOR[1], din[15:11]},
                                {osd_pixel, osd_pixel, OSD_COLOR[0], din[7:3]}};
+	de_out <= de_in;
+end
 
 endmodule

@@ -96,6 +96,9 @@ assign SDIO_DAT[2:1] = 2'bZZ;
 
 //////////////////////////  LEDs  ///////////////////////////////////////
 
+reg [7:0] led_overtake = 0;
+reg [7:0] led_state    = 0;
+
 wire led_p =  led_power[1] ? ~led_power[0] : 1'b0;
 wire led_d =  led_disk[1]  ? ~led_disk[0]  : ~(led_disk[0] | gp_out[29]);
 wire led_u = ~led_user;
@@ -105,7 +108,7 @@ assign LED_HDD   = led_d ? 1'bZ : 1'b0;
 assign LED_USER  = led_u ? 1'bZ : 1'b0;
 
 //LEDs on main board
-assign LED = {3'b000, ~led_p, 1'b0, ~led_d, 1'b0, ~led_u};
+assign LED = (led_overtake & led_state) | (~led_overtake & {3'b000, ~led_p, 1'b0, ~led_d, 1'b0, ~led_u});
 
 
 //////////////////////////  Buttons  ///////////////////////////////////
@@ -193,7 +196,6 @@ wire       csync     = cfg[3];
 wire vga_scaler= cfg[2];
 `endif
 
-reg        cfg_custom   = 0;
 reg        cfg_custom_t = 0;
 reg  [5:0] cfg_custom_p1;
 reg [31:0] cfg_custom_p2;
@@ -221,17 +223,18 @@ always@(posedge clk_sys) begin
 		end
 		else
 		if(cmd == 'h20) begin
+			cfg_got <= 0;
 			cnt <= cnt + 1'd1;
 			if(cnt<8) begin
 				case(cnt)
-					0: WIDTH  = io_din[11:0];
-					1: HFP    = io_din[11:0];
-					2: HS     = io_din[11:0];
-					3: HBP    = io_din[11:0];
-					4: HEIGHT = io_din[11:0];
-					5: VFP    = io_din[11:0];
-					6: VS     = io_din[11:0];
-					7: VBP    = io_din[11:0];
+					0: WIDTH  <= io_din[11:0];
+					1: HFP    <= io_din[11:0];
+					2: HS     <= io_din[11:0];
+					3: HBP    <= io_din[11:0];
+					4: HEIGHT <= io_din[11:0];
+					5: VFP    <= io_din[11:0];
+					6: VS     <= io_din[11:0];
+					7: VBP    <= io_din[11:0];
 				endcase
 				if(!cnt) begin
 					cfg_custom_p1 <= 0;
@@ -240,7 +243,6 @@ always@(posedge clk_sys) begin
 				end
 			end
 			else begin
-				cfg_custom <= 1;
 				if(cnt[1:0]==0) cfg_custom_p1 <= io_din[5:0];
 				if(cnt[1:0]==1) cfg_custom_p2[15:0]  <= io_din;
 				if(cnt[1:0]==2) begin
@@ -250,9 +252,10 @@ always@(posedge clk_sys) begin
 				end
 			end
 		end
+		else
+		if(cmd == 'h25) {led_overtake, led_state} <= io_din;
 	end
 end
-
 
 ///////////////////////////  RESET  ///////////////////////////////////
 
@@ -278,6 +281,8 @@ end
 wire clk_ctl;
 
 ///////////////////////// VIP version  ///////////////////////////////
+
+wire iHdmiClk = ~HDMI_TX_CLK;			// Internal HDMI clock, inverted in relation to external clock
 
 `ifndef LITE
 
@@ -339,9 +344,9 @@ vip vip
 	.in_vid_bit_width(0),
 
 	//HDMI output
-	.hdmi_vid_clk(~HDMI_TX_CLK),
+	.hdmi_vid_clk( iHdmiClk),
 	.hdmi_vid_data(hdmi_data),
-	.hdmi_vid_datavalid(HDMI_TX_DE),
+	.hdmi_vid_datavalid(hdmi_de),
 	.hdmi_vid_v_sync(HDMI_TX_VS),
 	.hdmi_vid_h_sync(HDMI_TX_HS)
 );
@@ -387,7 +392,7 @@ wire [11:0] y;
 
 sync_vg #(.X_BITS(12), .Y_BITS(12)) sync_vg
 (
-	.clk(HDMI_TX_CLK),
+	.clk(iHdmiClk),
 	.reset(reset),
 	.v_total(HEIGHT+VFP+VBP+VS),
 	.v_fp(VFP),
@@ -416,13 +421,12 @@ pattern_vg
 #(
 	.B(8), // Bits per channel
 	.X_BITS(12),
-	.Y_BITS(12),
-	.FRACTIONAL_BITS(12) // Number of fractional bits for ramp pattern
+	.Y_BITS(12)
 )
 pattern_vg
 (
 	.reset(reset),
-	.clk_in(HDMI_TX_CLK),
+	.clk_in(iHdmiClk),
 	.x(x),
 	.y(y),
 	.vn_in(vs_hdmi),
@@ -433,14 +437,13 @@ pattern_vg
 	.b_in(0),
 	.vn_out(HDMI_TX_VS),
 	.hn_out(HDMI_TX_HS),
-	.den_out(HDMI_TX_DE),
+	.den_out(hdmi_de),
 	.r_out(hdmi_data[23:16]),
 	.g_out(hdmi_data[15:8]),
 	.b_out(hdmi_data[7:0]),
 	.total_active_pix(WIDTH),
 	.total_active_lines(HEIGHT),
-	.pattern(patt),
-	.ramp_step(20'h0333)
+	.pattern(patt)
 );
 
 wire reset;
@@ -542,7 +545,6 @@ pll_hdmi_cfg pll_hdmi_cfg
 reg cfg_ready = 0;
 
 always @(posedge FPGA_CLK1_50) begin
-	reg [1:0] stage = 0;
 	reg gotd = 0, gotd2 = 0;
 	reg custd = 0, custd2 = 0;
 	reg old_wait = 0;
@@ -551,14 +553,6 @@ always @(posedge FPGA_CLK1_50) begin
 	gotd2 <= gotd;
 	
 	cfg_write <= 0;
-	if(~gotd2 & gotd) begin
-		if(~cfg_custom) begin
-			cfg_address <= 31;
-			cfg_data <= 0;
-			cfg_write <= 1;
-		end
-		stage <= stage + 1'd1;
-	end
 	
 	custd <= cfg_custom_t;
 	custd2 <= custd;
@@ -568,15 +562,15 @@ always @(posedge FPGA_CLK1_50) begin
 		cfg_write <= 1;
 	end
 
-	if(stage == 1) begin
+	if(~gotd2 & gotd) begin
 		cfg_address <= 2;
 		cfg_data <= 0;
 		cfg_write <= 1;
-		stage <= stage + 1'd1;
 	end
 
 	old_wait <= cfg_waitrequest;
 	if(old_wait & ~cfg_waitrequest & gotd) cfg_ready <= 1;
+	if(~gotd) cfg_ready <= 0;
 end
 
 hdmi_config hdmi_config
@@ -592,6 +586,8 @@ hdmi_config hdmi_config
 );
 
 wire [23:0] hdmi_data;
+wire        hdmi_de;
+
 osd hdmi_osd
 (
 	.clk_sys(clk_sys),
@@ -600,10 +596,11 @@ osd hdmi_osd
 	.io_strobe(io_strobe),
 	.io_din(io_din[7:0]),
 
-	.clk_video(HDMI_TX_CLK),
+	.clk_video(iHdmiClk),
 	.din(hdmi_data),
 	.dout(HDMI_TX_D),
-	.de(HDMI_TX_DE)
+	.de_in(hdmi_de),
+	.de_out(HDMI_TX_DE)
 );
 
 assign HDMI_MCLK = 0;
@@ -637,7 +634,7 @@ osd vga_osd
 	.clk_video(clk_vid),
 	.din(de ? {r_out, g_out, b_out} : 24'd0),
 	.dout(vga_q),
-	.de(de)
+	.de_in(de)
 );
 
 wire [23:0] vga_o;
@@ -700,11 +697,39 @@ spdif toslink
 	.spdif_o(AUDIO_SPDIF)
 );
 
+reg [15:0] audio_l; 
+reg [15:0] audio_r;
+
+always @(*) begin
+	case({audio_s,audio_mix})
+		'b000: audio_l = audio_ls;
+		'b001: audio_l = audio_ls - (audio_ls >> 3) + (audio_rs >> 3);
+		'b010: audio_l = audio_ls - (audio_ls >> 2) + (audio_rs >> 2);
+		'b011: audio_l = (audio_ls >> 1) + (audio_rs >> 1);
+		'b100: audio_l = audio_ls;
+		'b101: audio_l = audio_ls - (audio_ls >>> 3) + (audio_rs >>> 3);
+		'b110: audio_l = audio_ls - (audio_ls >>> 2) + (audio_rs >>> 2);
+		'b111: audio_l = (audio_ls >>> 1) + (audio_rs >>> 1);
+	endcase
+
+	case({audio_s,audio_mix})
+		'b000: audio_r = audio_rs;
+		'b001: audio_r = audio_rs - (audio_rs >> 3) + (audio_ls >> 3);
+		'b010: audio_r = audio_rs - (audio_rs >> 2) + (audio_ls >> 2);
+		'b011: audio_r = (audio_rs >> 1) + (audio_ls >> 1);
+		'b100: audio_r = audio_rs;
+		'b101: audio_r = audio_rs - (audio_rs >>> 3) + (audio_ls >>> 3);
+		'b110: audio_r = audio_rs - (audio_rs >>> 2) + (audio_ls >>> 2);
+		'b111: audio_r = (audio_rs >>> 1) + (audio_ls >>> 1);
+	endcase
+end
+
 
 ///////////////////  User module connection ////////////////////////////
 
-wire [15:0] audio_l, audio_r;
+wire signed [15:0] audio_ls, audio_rs;
 wire        audio_s;
+wire  [1:0] audio_mix;
 wire  [7:0] r_out, g_out, b_out;
 wire        vs, hs, de;
 wire        clk_sys, clk_vid, ce_pix;
@@ -758,9 +783,10 @@ emu emu
 
 	.PATTERN(patt),
 
-	.AUDIO_L(audio_l),
-	.AUDIO_R(audio_r),
+	.AUDIO_L(audio_ls),
+	.AUDIO_R(audio_rs),
 	.AUDIO_S(audio_s),
+	.AUDIO_MIX(audio_mix),
 	.TAPE_IN(0),
 
 	// SCK  -> CLK
