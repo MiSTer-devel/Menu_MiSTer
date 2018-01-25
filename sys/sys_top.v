@@ -277,12 +277,11 @@ always @(posedge FPGA_CLK2_50) begin
 	resetd2 <= resetd;
 end
 
-// 100MHz
 wire clk_ctl;
 
 ///////////////////////// VIP version  ///////////////////////////////
 
-wire iHdmiClk = ~HDMI_TX_CLK;			// Internal HDMI clock, inverted in relation to external clock
+wire iHdmiClk = HDMI_TX_CLK;			// Internal HDMI clock, inverted in relation to external clock
 
 `ifndef LITE
 
@@ -332,23 +331,20 @@ vip vip
 	.ram2_write(0),
 
 	//Video input
-	.in_vid_clk(clk_vid),
-	.in_vid_data({r_out, g_out, b_out}),
-	.in_vid_de(de),
-	.in_vid_v_sync(vs),
-	.in_vid_h_sync(hs),
-	.in_vid_datavalid(ce_pix),
-	.in_vid_locked(1),
-	.in_vid_f(0),
-	.in_vid_color_encoding(0),
-	.in_vid_bit_width(0),
+	.in_clk(clk_vid),
+	.in_data({r_out, g_out, b_out}),
+	.in_de(de),
+	.in_v_sync(vs),
+	.in_h_sync(hs),
+	.in_ce(ce_pix),
+	.in_f(0),
 
 	//HDMI output
-	.hdmi_vid_clk( iHdmiClk),
-	.hdmi_vid_data(hdmi_data),
-	.hdmi_vid_datavalid(hdmi_de),
-	.hdmi_vid_v_sync(HDMI_TX_VS),
-	.hdmi_vid_h_sync(HDMI_TX_HS)
+	.hdmi_clk(iHdmiClk),
+	.hdmi_data(hdmi_data),
+	.hdmi_de(hdmi_de),
+	.hdmi_v_sync(HDMI_TX_VS),
+	.hdmi_h_sync(HDMI_TX_HS)
 );
 
 wire  [8:0] ctl_address;
