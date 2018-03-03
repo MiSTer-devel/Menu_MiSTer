@@ -402,8 +402,6 @@ sync_vg #(.X_BITS(12), .Y_BITS(12)) sync_vg
 	.vde_out(vde),
 	.hde_out(hde),
 	.vs_out(vs_hdmi),
-	.v_count_out(),
-	.h_count_out(),
 	.x_out(x),
 	.y_out(y),
 	.hs_out(hs_hdmi)
@@ -428,9 +426,6 @@ pattern_vg
 	.vn_in(vs_hdmi),
 	.hn_in(hs_hdmi),
 	.dn_in(vde & hde),
-	.r_in(0),
-	.g_in(0),
-	.b_in(0),
 	.vn_out(HDMI_TX_VS),
 	.hn_out(HDMI_TX_HS),
 	.den_out(hdmi_de),

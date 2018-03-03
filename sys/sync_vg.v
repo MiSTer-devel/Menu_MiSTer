@@ -20,8 +20,6 @@ module sync_vg
 	output reg hs_out,
 	output reg hde_out,
 	output reg vde_out,
-	output reg [Y_BITS-1:0] v_count_out,
-	output reg [X_BITS-1:0] h_count_out,
 	output reg [X_BITS-1:0] x_out,
 	output reg [Y_BITS-1:0] y_out
 );
@@ -52,27 +50,38 @@ always @(posedge clk)
 			v_count <= v_count + 1'd1;
 	end
 
+reg [X_BITS-1:0] x;
+reg [Y_BITS-1:0] y;
+reg vs;
+reg hs;
+reg hde;
+reg vde;
+
 always @(posedge clk)
-	if (reset)
-		{ vs_out, hs_out, hde_out, vde_out } <= 0;
+	if (reset) { vs, hs, hde, vde } <= 0;
 	else begin
-		hs_out <= ((h_count < h_sync));
+		hs <= ((h_count < h_sync));
 
-		hde_out <= (h_count >= h_sync + h_bp) && (h_count <= h_total - h_fp - 1);
-		vde_out <= (v_count >= v_sync + v_bp) && (v_count <= v_total - v_fp - 1);
+		if((h_count >= h_sync + h_bp) && (h_count <= h_total - h_fp - 1)) begin
+			x <= h_count - (h_sync + h_bp);
+			hde <= 1;
+		end else begin
+			x <= 0;
+			hde <= 0;
+		end
 
-		if ((v_count == 0) && (h_count == hv_offset))
-			vs_out <= 1'b1;
-		else if ((v_count == v_sync) && (h_count == hv_offset))
-			vs_out <= 1'b0;
+		if((v_count >= v_sync + v_bp) && (v_count <= v_total - v_fp - 1)) begin
+			y <= v_count - (v_sync + v_bp);
+			vde <= 1;
+		end else begin
+			y <=0;
+			vde <= 0;
+		end
 
-		/* H_COUNT_OUT and V_COUNT_OUT */
-		h_count_out <= h_count;
-		v_count_out <= v_count;
-
-		/* X and Y coords for a backend pattern generator */
-		x_out <= h_count - (h_sync + h_bp);
-		y_out <= v_count - (v_sync + v_bp);
+		if ((v_count == 0) && (h_count == hv_offset))      vs <= 1'b1;
+		if ((v_count == v_sync) && (h_count == hv_offset)) vs <= 1'b0;
 	end
+
+always @(posedge clk) {vs_out,hs_out,hde_out,vde_out,x_out,y_out} <= {vs,hs,hde,vde,x,y};
 
 endmodule
