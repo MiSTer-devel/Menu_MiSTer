@@ -1,7 +1,7 @@
 //============================================================================
 //
-//  Menu startup core for DE10-nano board. 
-//  Copyright (C) 2017 Sorgelig
+//  Menu for MiSTer.
+//  Copyright (C) 2017,2018 Sorgelig
 //
 //
 //  This program is free software; you can redistribute it and/or modify it
@@ -30,7 +30,7 @@ module emu
 	output        RESET_OUT,
 
 	//Must be passed to hps_io module
-	inout  [43:0] HPS_BUS,
+	inout  [44:0] HPS_BUS,
 
 	//Base video clock. Usually equals to CLK_SYS.
 	output        CLK_VIDEO,
@@ -46,8 +46,8 @@ module emu
 	output  [7:0] VGA_R,
 	output  [7:0] VGA_G,
 	output  [7:0] VGA_B,
-	output        VGA_HS,    // positive pulse!
-	output        VGA_VS,    // positive pulse!
+	output        VGA_HS,
+	output        VGA_VS,
 	output        VGA_DE,    // = ~(VBlank | HBlank)
 
 	output        LED_USER,  // 1 - ON, 0 - OFF.
@@ -60,7 +60,7 @@ module emu
 
 	output [15:0] AUDIO_L,
 	output [15:0] AUDIO_R,
-	output        AUDIO_S, // 1 - signed audio samples, 0 - unsigned
+	output        AUDIO_S,   // 1 - signed audio samples, 0 - unsigned
 	output  [1:0] AUDIO_MIX, // 0 - no mix, 1 - 25%, 2 - 50%, 3 - 100% (mono)
 	input         TAPE_IN,
 
@@ -69,6 +69,7 @@ module emu
 	output        SD_MOSI,
 	input         SD_MISO,
 	output        SD_CS,
+	input         SD_CD,
 
 	output  [2:0] PATTERN,
 

@@ -7,7 +7,7 @@ module osd
 
 	input         io_osd,
 	input         io_strobe,
-	input   [7:0] io_din,
+	input  [15:0] io_din,
 
 	input         clk_video,
 	input  [23:0] din,
@@ -23,14 +23,11 @@ parameter  OSD_Y_OFFSET = 12'd0;
 localparam OSD_WIDTH    = 12'd256;
 localparam OSD_HEIGHT   = 12'd64;
 
-// this core supports only the display related OSD commands
-// of the minimig v1
 reg osd_enable;
-(* ramstyle = "no_rw_check" *) reg  [7:0] osd_buffer[4096+1024];  // the OSD buffer itself
+(* ramstyle = "no_rw_check" *) reg  [7:0] osd_buffer[4096+1024];
 
 reg highres = 0;
 
-// the OSD has its own SPI interface to the io controller
 always@(posedge clk_sys) begin
 	reg [12:0] bcnt;
 	reg  [7:0] cmd;
@@ -42,24 +39,28 @@ always@(posedge clk_sys) begin
 	if(~io_osd) begin
 		bcnt <= 0;
 		has_cmd <= 0;
+		cmd <= 0;
+		if(cmd[7:4] == 4) osd_enable <= cmd[0];
 	end else begin
 		if(~old_strobe & io_strobe) begin
 			if(!has_cmd) begin
 				has_cmd <= 1;
-				cmd <= io_din;
+				cmd <= io_din[7:0];
 				// command 0x40: OSDCMDENABLE, OSDCMDDISABLE
-				if(io_din[7:4] == 4'b0100) begin
-					osd_enable <= io_din[0];
+				if(io_din[7:4] == 4) begin
 					if(!io_din[0]) highres <= 0;
+					bcnt  <= 0;
 				end
-				bcnt <= {io_din[4:0], 8'h00};
-				if(io_din[7:3] == 5'b00101) highres <= 1;
+				// command 0x20: OSDCMDWRITE
+				if(io_din[7:5] == 'b001) begin
+					if(io_din[3]) highres <= 1;
+					bcnt <= {io_din[4:0], 8'h00};
+				end
 			end else begin
 				// command 0x20: OSDCMDWRITE
-				if(cmd[7:5] == 3'b001) begin
-					osd_buffer[bcnt] <= io_din;
-					bcnt <= bcnt + 1'd1;
-				end
+				if(cmd[7:5] == 'b001) osd_buffer[bcnt] <= io_din[7:0];
+
+				bcnt <= bcnt + 1'd1;
 			end
 		end
 	end
@@ -115,22 +116,27 @@ always @(posedge clk_video) begin
 			if(h_cnt > {dsp_width, 2'b00}) begin
 				v_cnt <= 0;
 				dsp_height <= v_cnt;
-				
-				if(v_cnt<320) begin
-					multiscan <= 0;
-					fheight <= hrheight;
-				end
-				else if(v_cnt<640) begin
-					multiscan <= 1;
-					fheight <= hrheight << 1;
-				end
-				else if(v_cnt<960) begin
-					multiscan <= 2;
-					fheight <= hrheight + (hrheight<<1);
+
+				if(osd_enable) begin
+					if(v_cnt<320) begin
+						multiscan <= 0;
+						fheight <= hrheight;
+					end
+					else if(v_cnt<640) begin
+						multiscan <= 1;
+						fheight <= hrheight << 1;
+					end
+					else if(v_cnt<960) begin
+						multiscan <= 2;
+						fheight <= hrheight + (hrheight<<1);
+					end
+					else begin
+						multiscan <= 3;
+						fheight <= hrheight << 2;
+					end
 				end
 				else begin
-					multiscan <= 3;
-					fheight <= hrheight << 2;
+					fheight <= 0;
 				end
 			end
 			h_cnt <= 0;
@@ -162,15 +168,6 @@ wire osd_de = osd_enable &&
               (v_cnt >= v_osd_start) && (v_cnt < v_osd_end);
 
 wire osd_pixel = osd_byte[osd_vcnt[2:0]];
-
-
-//
-//
-// Pipeline one cycle to improve timing
-//
-//assign dout = !osd_de ? din : {{osd_pixel, osd_pixel, OSD_COLOR[2], din[23:19]},
-//                               {osd_pixel, osd_pixel, OSD_COLOR[1], din[15:11]},
-//                               {osd_pixel, osd_pixel, OSD_COLOR[0], din[7:3]}};
 
 reg [23:0] rdout;
 assign dout = rdout;
