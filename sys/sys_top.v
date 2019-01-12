@@ -96,7 +96,6 @@ module sys_top
 
 assign SDIO_DAT[2:1] = 2'bZZ;
 
-
 //////////////////////////  LEDs  ///////////////////////////////////////
 
 reg [7:0] led_overtake = 0;
@@ -204,7 +203,6 @@ reg [31:0] cfg_custom_p2;
 
 reg  [4:0] vol_att = 0;
 
-reg        vip_newcfg = 0;
 always@(posedge clk_sys) begin
 	reg  [7:0] cmd;
 	reg        has_cmd;
@@ -213,7 +211,9 @@ always@(posedge clk_sys) begin
 
 	old_strobe <= io_strobe;
 
-	if(~io_uio) has_cmd <= 0;
+	if(~io_uio) begin
+		has_cmd <= 0;
+	end
 	else
 	if(~old_strobe & io_strobe) begin
 		if(!has_cmd) begin
@@ -230,16 +230,15 @@ always@(posedge clk_sys) begin
 				cfg_set <= 0;
 				cnt <= cnt + 1'd1;
 				if(cnt<8) begin
-					if(!cnt) vip_newcfg <= ~cfg_ready;
 					case(cnt)
-						0: if(WIDTH  != io_din[11:0]) begin WIDTH  <= io_din[11:0]; vip_newcfg <= 1; end
-						1: if(HFP    != io_din[11:0]) begin HFP    <= io_din[11:0]; vip_newcfg <= 1; end
-						2: if(HS     != io_din[11:0]) begin HS     <= io_din[11:0]; vip_newcfg <= 1; end
-						3: if(HBP    != io_din[11:0]) begin HBP    <= io_din[11:0]; vip_newcfg <= 1; end
-						4: if(HEIGHT != io_din[11:0]) begin HEIGHT <= io_din[11:0]; vip_newcfg <= 1; end
-						5: if(VFP    != io_din[11:0]) begin VFP    <= io_din[11:0]; vip_newcfg <= 1; end
-						6: if(VS     != io_din[11:0]) begin VS     <= io_din[11:0]; vip_newcfg <= 1; end
-						7: if(VBP    != io_din[11:0]) begin VBP    <= io_din[11:0]; vip_newcfg <= 1; end
+						0: if(WIDTH  != io_din[11:0]) begin WIDTH  <= io_din[11:0]; end
+						1: if(HFP    != io_din[11:0]) begin HFP    <= io_din[11:0]; end
+						2: if(HS     != io_din[11:0]) begin HS     <= io_din[11:0]; end
+						3: if(HBP    != io_din[11:0]) begin HBP    <= io_din[11:0]; end
+						4: if(HEIGHT != io_din[11:0]) begin HEIGHT <= io_din[11:0]; end
+						5: if(VFP    != io_din[11:0]) begin VFP    <= io_din[11:0]; end
+						6: if(VS     != io_din[11:0]) begin VS     <= io_din[11:0]; end
+						7: if(VBP    != io_din[11:0]) begin VBP    <= io_din[11:0]; end
 					endcase
 					if(cnt == 1) begin
 						cfg_custom_p1 <= 0;
@@ -259,7 +258,6 @@ always@(posedge clk_sys) begin
 			end
 			if(cmd == 'h25) {led_overtake, led_state} <= io_din;
 			if(cmd == 'h26) vol_att <= io_din[4:0];
-			if(cmd == 'h27) VSET    <= io_din[11:0];
 		end
 	end
 end
@@ -297,111 +295,7 @@ end
 wire clk_ctl;
 wire iHdmiClk = HDMI_TX_CLK;
 
-///////////////////////// VIP version  ///////////////////////////////
-
-
-`ifndef LITE
-
-wire reset;
-vip vip
-(
-	//Reset/Clock
-	.reset_reset_req(reset_req | ~cfg_ready),
-	.reset_reset(reset),
-	.reset_reset_vip(0),
-
-	//DE10-nano has no reset signal on GPIO, so core has to emulate cold reset button.
-	.reset_cold_req(~btn_reset),
-	.reset_warm_req(0),
-
-	//control
-	.ctl_address(ctl_address),
-	.ctl_write(ctl_write),
-	.ctl_writedata(ctl_writedata),
-	.ctl_waitrequest(ctl_waitrequest),
-	.ctl_clock(clk_ctl),
-	.ctl_reset(ctl_reset),
-
-	//64-bit DDR3 RAM access
-	.ramclk1_clk(ram_clk),
-	.ram1_address(ram_address),
-	.ram1_burstcount(ram_burstcount),
-	.ram1_waitrequest(ram_waitrequest),
-	.ram1_readdata(ram_readdata),
-	.ram1_readdatavalid(ram_readdatavalid),
-	.ram1_read(ram_read),
-	.ram1_writedata(ram_writedata),
-	.ram1_byteenable(ram_byteenable),
-	.ram1_write(ram_write),
-
-	//Spare 64-bit DDR3 RAM access
-	//currently unused
-	//can combine with ram1 to make a wider RAM bus (although will increase the latency)
-	.ramclk2_clk(0),
-	.ram2_address(0),
-	.ram2_burstcount(0),
-	.ram2_waitrequest(),
-	.ram2_readdata(),
-	.ram2_readdatavalid(),
-	.ram2_read(0),
-	.ram2_writedata(0),
-	.ram2_byteenable(0),
-	.ram2_write(0),
-
-	//Video input
-	.in_clk(clk_vid),
-	.in_data({r_out, g_out, b_out}),
-	.in_de(de),
-	.in_v_sync(vs),
-	.in_h_sync(hs),
-	.in_ce(ce_pix),
-	.in_f(0),
-
-	//HDMI output
-	.hdmi_clk(iHdmiClk),
-	.hdmi_data(hdmi_data),
-	.hdmi_de(hdmi_de),
-	.hdmi_v_sync(HDMI_TX_VS),
-	.hdmi_h_sync(HDMI_TX_HS)
-);
-
-wire  [8:0] ctl_address;
-wire        ctl_write;
-wire [31:0] ctl_writedata;
-wire        ctl_waitrequest;
-wire        ctl_reset;
-wire  [7:0] ARX, ARY;
-
-vip_config vip_config
-(
-	.clk(clk_ctl),
-	.reset(ctl_reset),
-
-	.ARX(ARX),
-	.ARY(ARY),
-	.CFG_SET(vip_newcfg & cfg_got),
-
-	.WIDTH(WIDTH),
-	.HFP(HFP),
-	.HBP(HBP),
-	.HS(HS),
-	.HEIGHT(HEIGHT),
-	.VFP(VFP),
-	.VBP(VBP),
-	.VS(VS),
-	.VSET(VSET),
-
-	.address(ctl_address),
-	.write(ctl_write),
-	.writedata(ctl_writedata),
-	.waitrequest(ctl_waitrequest)
-);
-`endif
-
-
 /////////////////////////  Lite version  ////////////////////////////////
-
-`ifdef LITE
 
 wire [11:0] x;
 wire [11:0] y;
@@ -495,6 +389,16 @@ sysmem_lite sysmem
 	.ram2_byteenable(0),
 	.ram2_write(0),
 
+	.uart_ri(0),
+	.uart_dsr(uart_dsr),
+	.uart_dcd(uart_dsr),
+	.uart_dtr(uart_dtr),
+
+	.uart_cts(uart_cts),
+	.uart_rts(uart_rts),
+	.uart_rxd(uart_rxd),
+	.uart_txd(uart_txd), 
+
 	// HDMI frame buffer
 	.vbuf_clk(clk_ctl),
 	.vbuf_address(0),
@@ -508,7 +412,6 @@ sysmem_lite sysmem
 	.vbuf_read(0)
 );
 
-`endif
 
 
 /////////////////////////  HDMI output  /////////////////////////////////
@@ -531,7 +434,6 @@ reg  [11:0] HEIGHT = 1080;
 reg  [11:0] VFP    = 4;
 reg  [11:0] VS     = 5;
 reg  [11:0] VBP    = 36;
-reg  [11:0] VSET   = 0;
 
 wire [63:0] reconfig_to_pll;
 wire [63:0] reconfig_from_pll;
@@ -777,8 +679,15 @@ wire  [1:0] led_power;
 wire  [1:0] led_disk;
 
 wire vs_emu, hs_emu;
-sync_fix sync_v(FPGA_CLK3_50, vs_emu, vs);
-sync_fix sync_h(FPGA_CLK3_50, hs_emu, hs);
+sync_fix sync_v(clk_vid, vs_emu, vs);
+sync_fix sync_h(clk_vid, hs_emu, hs);
+
+wire        uart_dtr;
+wire        uart_dsr;
+wire        uart_cts;
+wire        uart_rts;
+wire        uart_rxd;
+wire        uart_txd;
 
 emu emu
 (
@@ -800,11 +709,6 @@ emu emu
 	.LED_USER(led_user),
 	.LED_POWER(led_power),
 	.LED_DISK(led_disk),
-
-`ifndef LITE
-	.VIDEO_ARX(ARX),
-	.VIDEO_ARY(ARY),
-`endif
 
 	.PATTERN(patt),
 
@@ -847,7 +751,14 @@ emu emu
 	.SDRAM_nRAS(SDRAM_nRAS),
 	.SDRAM_nCAS(SDRAM_nCAS),
 	.SDRAM_CLK(SDRAM_CLK),
-	.SDRAM_CKE(SDRAM_CKE)
+	.SDRAM_CKE(SDRAM_CKE),
+
+	.UART_CTS(uart_rts),
+	.UART_RTS(uart_cts),
+	.UART_RXD(uart_txd),
+	.UART_TXD(uart_rxd),
+	.UART_DTR(uart_dsr),
+	.UART_DSR(uart_dtr)
 );
 
 endmodule

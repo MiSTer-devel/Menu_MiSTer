@@ -97,9 +97,17 @@ module emu
 	output        SDRAM_nCS,
 	output        SDRAM_nCAS,
 	output        SDRAM_nRAS,
-	output        SDRAM_nWE
+	output        SDRAM_nWE,
+	
+	input         UART_CTS,
+	output        UART_RTS,
+	input         UART_RXD,
+	output        UART_TXD,
+	output        UART_DTR,
+	input         UART_DSR
 );
 
+assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 
 assign DDRAM_CLK = clk_sys;
@@ -219,14 +227,14 @@ wire [63:0] rnd;
 
 lfsr random(rnd);
 
-always @(negedge CLK_VIDEO) begin
+always @(posedge CLK_VIDEO) begin
 	if(forced_scandoubler) ce_pix <= 1;
 		else ce_pix <= ~ce_pix;
 
 	if(ce_pix) begin
 		if(hc == 639) begin
 			hc <= 0;
-			if(vc == (forced_scandoubler ? 623 : 311)) begin 
+			if(vc == (forced_scandoubler ? 523 : 261)) begin 
 				vc <= 0;
 				vvc <= vvc + 9'd6;
 			end else begin
@@ -250,13 +258,13 @@ always @(posedge CLK_VIDEO) begin
 	if (hc == 550) HBlank <= 1;
 		else if (hc == 0) HBlank <= 0;
 
-	if (hc == 579) HSync <= 1;
-		else if (hc == 611) HSync <= 0;
+	if (hc == 570) HSync <= 1;
+		else if (hc == 602) HSync <= 0;
 
-	if(vc == (forced_scandoubler ? 609 : 304)) VSync <= 1;
-		else if (vc == (forced_scandoubler ? 617 : 308)) VSync <= 0;
+	if(vc == (forced_scandoubler ? 490 : 245)) VSync <= 1;
+		else if (vc == (forced_scandoubler ? 496 : 248)) VSync <= 0;
 
-	if(vc == (forced_scandoubler ? 601 : 300)) VBlank <= 1;
+	if(vc == (forced_scandoubler ? 480 : 240)) VBlank <= 1;
 		else if (vc == 0) VBlank <= 0;
 end
 
