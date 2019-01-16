@@ -1,7 +1,7 @@
 //============================================================================
 //
 //  MiSTer hardware abstraction module (Menu core only)
-//  (c)2017,2018 Sorgelig
+//  (c)2017-2019 Sorgelig
 //
 //  This program is free software; you can redistribute it and/or modify it
 //  under the terms of the GNU General Public License as published by the Free
@@ -272,6 +272,52 @@ always @(posedge clk_sys) begin
 	end
 end
 
+wire aspi_sck,aspi_mosi,aspi_ss;
+cyclonev_hps_interface_peripheral_spi_master spi
+(
+	.sclk_out(aspi_sck),
+	.txd(aspi_mosi), // mosi
+	.rxd(1),         // miso
+
+	.ss_0_n(aspi_ss),
+	.ss_in_n(1)
+);
+
+wire        aram_clk = FPGA_CLK3_50;
+wire [28:0] aram_address;
+wire  [7:0] aram_burstcount;
+wire        aram_waitrequest;
+wire [63:0] aram_readdata;
+wire        aram_readdatavalid;
+wire        aram_read;
+
+wire [15:0] alsa_l, alsa_r;
+
+alsa alsa
+(
+	.reset(reset),
+
+	.ram_clk(aram_clk),
+	.ram_address(aram_address),
+	.ram_burstcount(aram_burstcount),
+	.ram_waitrequest(aram_waitrequest),
+	.ram_readdata(aram_readdata),
+	.ram_readdatavalid(aram_readdatavalid),
+	.ram_read(aram_read),
+
+	.spi_ss(aspi_ss),
+	.spi_sck(aspi_sck),
+	.spi_mosi(aspi_mosi),
+
+	.pcm_l(alsa_l),
+	.pcm_r(alsa_r)
+);
+
+assign audio_s = 1;
+assign audio_ls = alsa_l;
+assign audio_rs = alsa_r;
+
+
 ///////////////////////////  RESET  ///////////////////////////////////
 
 reg reset_req = 0;
@@ -378,15 +424,15 @@ sysmem_lite sysmem
 	//Spare 64-bit DDR3 RAM access
 	//currently unused
 	//can combine with ram1 to make a wider RAM bus (although will increase the latency)
-	.ramclk2_clk(0),
-	.ram2_address(0),
-	.ram2_burstcount(0),
-	.ram2_waitrequest(),
-	.ram2_readdata(),
-	.ram2_readdatavalid(),
-	.ram2_read(0),
+	.ramclk2_clk(aram_clk),
+	.ram2_address(aram_address),
+	.ram2_burstcount(aram_burstcount),
+	.ram2_waitrequest(aram_waitrequest),
+	.ram2_readdata(aram_readdata),
+	.ram2_readdatavalid(aram_readdatavalid),
+	.ram2_read(aram_read),
 	.ram2_writedata(0),
-	.ram2_byteenable(0),
+	.ram2_byteenable(8'hFF),
 	.ram2_write(0),
 
 	.uart_ri(0),
@@ -712,9 +758,9 @@ emu emu
 
 	.PATTERN(patt),
 
-	.AUDIO_L(audio_ls),
-	.AUDIO_R(audio_rs),
-	.AUDIO_S(audio_s),
+	//.AUDIO_L(audio_ls),
+	//.AUDIO_R(audio_rs),
+	//.AUDIO_S(audio_s),
 	.AUDIO_MIX(audio_mix),
 	.TAPE_IN(0),
 
