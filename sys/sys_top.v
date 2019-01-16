@@ -202,6 +202,7 @@ reg  [5:0] cfg_custom_p1;
 reg [31:0] cfg_custom_p2;
 
 reg  [4:0] vol_att = 0;
+reg        pal = 0;
 
 always@(posedge clk_sys) begin
 	reg  [7:0] cmd;
@@ -252,8 +253,9 @@ always@(posedge clk_sys) begin
 					if(cnt[1:0]==2) begin
 						cfg_custom_p2[31:16] <= io_din;
 						cfg_custom_t <= ~cfg_custom_t;
-						cnt[1:0] <= 0;
+						cnt[2:0] <= 3'b100;
 					end
+					if(cnt == 8) pal <= io_din[15];
 				end
 			end
 			if(cmd == 'h25) {led_overtake, led_state} <= io_din;
@@ -745,6 +747,7 @@ emu emu
 	.CLK_VIDEO(clk_vid),
 	.CE_PIXEL(ce_pix),
 
+	.PAL(pal),
 	.VGA_R(r_out),
 	.VGA_G(g_out),
 	.VGA_B(b_out),

@@ -43,6 +43,7 @@ module emu
 	output  [7:0] VIDEO_ARX,
 	output  [7:0] VIDEO_ARY,
 
+	input         PAL,
 	output  [7:0] VGA_R,
 	output  [7:0] VGA_G,
 	output  [7:0] VGA_B,
@@ -234,7 +235,7 @@ always @(posedge CLK_VIDEO) begin
 	if(ce_pix) begin
 		if(hc == 639) begin
 			hc <= 0;
-			if(vc == (forced_scandoubler ? 523 : 261)) begin 
+			if(vc == (PAL ? (forced_scandoubler ? 623 : 311) : (forced_scandoubler ? 523 : 261))) begin 
 				vc <= 0;
 				vvc <= vvc + 9'd6;
 			end else begin
@@ -261,11 +262,20 @@ always @(posedge CLK_VIDEO) begin
 	if (hc == 570) HSync <= 1;
 		else if (hc == 602) HSync <= 0;
 
-	if(vc == (forced_scandoubler ? 490 : 245)) VSync <= 1;
-		else if (vc == (forced_scandoubler ? 496 : 248)) VSync <= 0;
+	if(PAL) begin
+		if(vc == (forced_scandoubler ? 609 : 304)) VSync <= 1;
+			else if (vc == (forced_scandoubler ? 617 : 308)) VSync <= 0;
 
-	if(vc == (forced_scandoubler ? 480 : 240)) VBlank <= 1;
-		else if (vc == 0) VBlank <= 0;
+		if(vc == (forced_scandoubler ? 601 : 300)) VBlank <= 1;
+			else if (vc == 0) VBlank <= 0;
+	end
+	else begin
+		if(vc == (forced_scandoubler ? 490 : 245)) VSync <= 1;
+			else if (vc == (forced_scandoubler ? 496 : 248)) VSync <= 0;
+
+		if(vc == (forced_scandoubler ? 480 : 240)) VBlank <= 1;
+			else if (vc == 0) VBlank <= 0;
+	end
 end
 
 reg  [7:0] cos_out;
