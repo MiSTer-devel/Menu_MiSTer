@@ -340,7 +340,6 @@ sync_vg #(.X_BITS(12), .Y_BITS(12)) sync_vg
 	.h_fp(HFP),
 	.h_bp(HBP),
 	.h_sync(HS),
-	.hv_offset(0),
 	.vde_out(vde),
 	.hde_out(hde),
 	.vs_out(vs_hdmi),

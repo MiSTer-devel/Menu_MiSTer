@@ -14,7 +14,6 @@ module sync_vg
 	input wire [X_BITS-1:0] h_fp,
 	input wire [X_BITS-1:0] h_bp,
 	input wire [X_BITS-1:0] h_sync,
-	input wire [X_BITS-1:0] hv_offset,
 
 	output reg vs_out,
 	output reg hs_out,
@@ -24,63 +23,57 @@ module sync_vg
 	output reg [Y_BITS-1:0] y_out
 );
 
-reg [X_BITS-1:0] h_count;
-reg [Y_BITS-1:0] v_count;
 
-/* horizontal counter */
-always @(posedge clk)
-	if (reset)
+reg [X_BITS-1:0] htotal,hbp,hfp,hsync;
+reg [Y_BITS-1:0] vtotal,vbp,vfp,vsync;
+always @(posedge clk) begin
+	vtotal <= v_total - 1'd1;
+	vsync <= v_sync - 1'd1;
+	vbp <= vsync  + v_bp;
+	vfp <= vtotal - v_fp;
+
+	htotal <= h_total - 1'd1;
+	hsync <= h_sync - 1'd1;
+	hbp <= hsync  + h_bp;
+	hfp <= htotal - h_fp;
+end
+
+
+reg [X_BITS-1:0] hcount;
+reg [Y_BITS-1:0] vcount;
+always @(posedge clk) begin
+	reg [X_BITS-1:0] h_count;
+	reg [Y_BITS-1:0] v_count;
+
+	h_count <= h_count + 1'd1;
+	if (h_count == htotal) begin
 		h_count <= 0;
-	else
-	if (h_count < h_total - 1)
-		h_count <= h_count + 1'd1;
-	else
-		h_count <= 0;
-		
-/* vertical counter */
-always @(posedge clk)
-	if (reset)
-		v_count <= 0;
-	else
-	if (h_count == h_total - 1)
-	begin
-		if (v_count == v_total - 1)
-			v_count <= 0;
-		else
-			v_count <= v_count + 1'd1;
+		v_count <= v_count + 1'd1;
+		if (v_count == vtotal) v_count <= 0;
 	end
+	
+	hcount <= h_count;
+	vcount <= v_count;
+end
+
 
 reg [X_BITS-1:0] x;
 reg [Y_BITS-1:0] y;
-reg vs;
-reg hs;
-reg hde;
-reg vde;
+reg hs,hde;
+reg vs,vde;
+always @(posedge clk) begin
+	if(hcount == htotal) hs <= 1;
+	if(hcount == hsync)  hs <= 0;
+	if(hcount == hbp)    hde <= 1;
+	if(hde)              x <= hcount - hbp;
+	if(hcount == hfp)    {hde,x} <= 0;
 
-always @(posedge clk)
-	if (reset) { vs, hs, hde, vde } <= 0;
-	else begin
-		hs <= ((h_count < h_sync));
-
-		if((h_count >= h_sync + h_bp) && (h_count <= h_total - h_fp - 1)) begin
-			x <= h_count - (h_sync + h_bp);
-			hde <= 1;
-		end else begin
-			x <= 0;
-			hde <= 0;
-		end
-
-		if((v_count >= v_sync + v_bp) && (v_count <= v_total - v_fp - 1)) begin
-			y <= v_count - (v_sync + v_bp);
-			vde <= 1;
-		end else begin
-			y <=0;
-			vde <= 0;
-		end
-
-		if ((v_count == 0) && (h_count == hv_offset))      vs <= 1'b1;
-		if ((v_count == v_sync) && (h_count == hv_offset)) vs <= 1'b0;
-	end
+	if(vcount == vtotal) vs <= 1;
+	if(vcount == vsync)  vs <= 0;
+	if(vcount == vbp)    vde <= 1;
+	if(vde)              y <= vcount - vbp;
+	if(vcount == vfp)    {vde,y} <= 0;
+end
 
 always @(posedge clk) {vs_out,hs_out,hde_out,vde_out,x_out,y_out} <= {vs,hs,hde,vde,x,y};
 
