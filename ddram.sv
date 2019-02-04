@@ -39,7 +39,7 @@ module ddram
 	output  [7:0] DDRAM_BE,
 	output        DDRAM_WE,
 
-   input  [27:0] addr,        // 256MB at the end of 1GB
+   input  [28:0] addr,        // 256MB at the end of 1GB
    output  [7:0] dout,        // data output to cpu
    input   [7:0] din,         // data input from cpu
    input         we,          // cpu requests write
@@ -49,7 +49,7 @@ module ddram
 
 assign DDRAM_BURSTCNT = 1;
 assign DDRAM_BE       = (8'd1<<ram_address[2:0]) | {8{ram_read}};
-assign DDRAM_ADDR     = {4'b0011, ram_address[27:3]}; // RAM at 0x30000000
+assign DDRAM_ADDR     = {3'b001, ram_address[28:3]}; // RAM at 0x20000000
 assign DDRAM_RD       = ram_read;
 assign DDRAM_DIN      = ram_cache;
 assign DDRAM_WE       = ram_write;
@@ -58,7 +58,7 @@ assign dout = ram_q;
 assign ready = ~busy;
 
 reg  [7:0] ram_q;
-reg [27:0] ram_address;
+reg [28:0] ram_address;
 reg        ram_read;
 reg [63:0] ram_cache;
 reg        ram_write;
@@ -107,13 +107,13 @@ begin
 				ram_address <= addr;
 				busy        <= 1;
 				ram_write 	<= 1;
-				cached      <= ((ram_address[27:3] == addr[27:3]) ? cached : 8'h00) | (8'd1<<addr[2:0]);
+				cached      <= ((ram_address[28:3] == addr[28:3]) ? cached : 8'h00) | (8'd1<<addr[2:0]);
 			end
 
 			if(~old_rd && rd)
 			begin
 				busy <= 1;
-				if((ram_address[27:3] == addr[27:3]) && (cached & (8'd1<<addr[2:0])))
+				if((ram_address[28:3] == addr[28:3]) && (cached & (8'd1<<addr[2:0])))
 				begin
 					ram_q <= ram_cache[{addr[2:0], 3'b000} +:8];
 				end

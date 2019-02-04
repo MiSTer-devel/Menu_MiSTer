@@ -203,7 +203,7 @@ ddram ddr
 );
 
 reg        we;
-reg [27:0] addr = 0;
+reg [28:0] addr = 0;
 
 always @(posedge clk_sys) begin
 	reg [4:0] cnt = 9;
