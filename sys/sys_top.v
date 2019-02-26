@@ -90,7 +90,10 @@ module sys_top
 	input   [3:0] SW,
 
 	////////// MB LED ///////////
-	output  [7:0] LED
+	output  [7:0] LED,
+
+	///////// USER IO ///////////
+	inout   [5:0] USER_IO
 );
 
 
@@ -342,19 +345,19 @@ sync_vg #(.X_BITS(12), .Y_BITS(12)) sync_vg
 	.h_sync(HS),
 	.vde_out(vde),
 	.hde_out(hde),
-	.vs_out(vs_hdmi),
+	.vs_out(hdmi_vs),
 	.x_out(x),
 	.y_out(y),
-	.hs_out(hs_hdmi)
+	.hs_out(hdmi_hs)
 );
 
 wire vde, hde;
-wire vs_hdmi;
-wire hs_hdmi;
+wire hdmi_vs,hdmi_vs2;
+wire hdmi_hs,hdmi_hs2;
 
 pattern_vg
 #(
-	.B(8), // Bits per channel
+	.B(8),
 	.X_BITS(12),
 	.Y_BITS(12)
 )
@@ -364,17 +367,17 @@ pattern_vg
 	.clk_in(clk_hdmi),
 	.x(x),
 	.y(y),
-	.vn_in(vs_hdmi),
-	.hn_in(hs_hdmi),
-	.dn_in(vde & hde),
-	.vn_out(HDMI_TX_VS),
-	.hn_out(HDMI_TX_HS),
-	.den_out(hdmi_de),
-	.r_out(hdmi_data[23:16]),
-	.g_out(hdmi_data[15:8]),
-	.b_out(hdmi_data[7:0]),
-	.total_active_pix(WIDTH),
-	.total_active_lines(HEIGHT),
+	.vs_in(hdmi_vs),
+	.hs_in(hdmi_hs),
+	.de_in(vde & hde),
+	.vs_out(hdmi_vs2),
+	.hs_out(hdmi_hs2),
+	.de_out(hdmi_de),
+	.r(hdmi_data[23:16]),
+	.g(hdmi_data[15:8]),
+	.b(hdmi_data[7:0]),
+	.width(WIDTH),
+	.height(HEIGHT),
 	.pattern(patt)
 );
 
@@ -382,15 +385,14 @@ wire reset;
 sysmem_lite sysmem
 (
 	//Reset/Clock
-	.reset_reset_req(reset_req),
-	.reset_reset(reset),
-	.ctl_clock(clk_100m),
+	.reset_core_req(reset_req),
+	.reset_out(reset),
+	.clock(clk_100m),
 	
-	.reset_cold_req(~btn_reset),
-	.reset_warm_req(0),
+	.reset_hps_cold_req(~btn_reset),
 
 	//64-bit DDR3 RAM access
-	.ramclk1_clk(ram_clk),
+	.ram1_clk(ram_clk),
 	.ram1_address(ram_address),
 	.ram1_burstcount(ram_burstcount),
 	.ram1_waitrequest(ram_waitrequest),
@@ -402,7 +404,7 @@ sysmem_lite sysmem
 	.ram1_write(ram_write),
 
 	//64-bit DDR3 RAM access
-	.ramclk2_clk(clk_audio),
+	.ram2_clk(clk_audio),
 	.ram2_address(aram_address),
 	.ram2_burstcount(aram_burstcount),
 	.ram2_waitrequest(aram_waitrequest),
@@ -512,8 +514,8 @@ hdmi_config hdmi_config
 	.audio_96k(audio_96k)
 );
 
-wire [23:0] hdmi_data;
-wire        hdmi_de;
+wire [23:0] hdmi_data,hdmi_data2;
+wire        hdmi_de,hdmi_de2;
 
 osd hdmi_osd
 (
@@ -525,31 +527,38 @@ osd hdmi_osd
 
 	.clk_video(clk_hdmi),
 	.din(hdmi_data),
-	.dout(HDMI_TX_D),
+	.dout(hdmi_data2),
 	.de_in(hdmi_de),
-	.de_out(HDMI_TX_DE)
+	.de_out(hdmi_de2)
 );
 
-assign HDMI_MCLK = 0;
-i2s i2s
+
+vid_dim hdmi_dim
 (
-	.reset(~cfg_ready),
-	.clk_sys(clk_audio),
-	.half_rate(~audio_96k),
+	.clk(clk_hdmi),
 
-	.sclk(HDMI_SCLK),
-	.lrclk(HDMI_LRCLK),
-	.sdata(HDMI_I2S),
+	.r_in(hdmi_data2[23:16]),
+	.g_in(hdmi_data2[15:8]),
+	.b_in(hdmi_data2[7:0]),
+	.de_in(hdmi_de2),
+	.hs_in(hdmi_hs2),
+	.vs_in(hdmi_vs2),
 
-	//Could inverse the MSB but it will shift 0 level to -MAX level
-	.left_chan (audio_l),
-	.right_chan(audio_r)
+	.r_out(HDMI_TX_D[23:16]),
+	.g_out(HDMI_TX_D[15:8]),
+	.b_out(HDMI_TX_D[7:0]),
+	.de_out(HDMI_TX_DE),
+	.hs_out(HDMI_TX_HS),
+	.vs_out(HDMI_TX_VS),
+
+	.dim(dim)
 );
 
 
 /////////////////////////  VGA output  //////////////////////////////////
 
-wire [23:0] vga_q;
+wire [23:0] vga_q, vga_q2;
+wire hs2,vs2;
 osd vga_osd
 (
 	.clk_sys(clk_sys),
@@ -564,18 +573,36 @@ osd vga_osd
 	.de_in(de)
 );
 
-wire [23:0] vga_o;
+vid_dim vga_dim
+(
+	.clk(clk_vid),
 
+	.r_in(vga_q[23:16]),
+	.g_in(vga_q[15:8]),
+	.b_in(vga_q[7:0]),
+	.hs_in(hs),
+	.vs_in(vs),
+
+	.r_out(vga_q2[23:16]),
+	.g_out(vga_q2[15:8]),
+	.b_out(vga_q2[7:0]),
+	.hs_out(hs2),
+	.vs_out(vs2),
+
+	.dim(dim)
+);
+
+wire [23:0] vga_o;
 vga_out vga_out
 (
 	.ypbpr_full(1),
 	.ypbpr_en(ypbpr_en),
 	.dout(vga_o),
-	.din(vga_scaler ? {24{HDMI_TX_DE}} & HDMI_TX_D : vga_q)
+	.din(vga_scaler ? (HDMI_TX_DE ? HDMI_TX_D : 24'd0) : vga_q2)
 );
 
-wire vs1 = vga_scaler ? HDMI_TX_VS : vs;
-wire hs1 = vga_scaler ? HDMI_TX_HS : hs;
+wire vs1 = vga_scaler ? HDMI_TX_VS : vs2;
+wire hs1 = vga_scaler ? HDMI_TX_HS : hs2;
 
 assign VGA_VS = VGA_EN ? 1'bZ      : csync ?     1'b1     : ~vs1;
 assign VGA_HS = VGA_EN ? 1'bZ      : csync ? ~(vs1 ^ hs1) : ~hs1;
@@ -586,7 +613,27 @@ assign VGA_B  = VGA_EN ? 6'bZZZZZZ : vga_o[7:2];
 
 /////////////////////////  Audio output  ////////////////////////////////
 
-wire anl, anr, aspdif;
+assign AUDIO_SPDIF = SW[0] ? HDMI_LRCLK : aspdif;
+assign AUDIO_R     = SW[0] ? HDMI_I2S   : anr;
+assign AUDIO_L     = SW[0] ? HDMI_SCLK  : anl;
+
+assign HDMI_MCLK = 0;
+i2s i2s
+(
+	.clk_sys(clk_audio),
+	.reset(reset),
+
+	.half_rate(~audio_96k),
+
+	.sclk(HDMI_SCLK),
+	.lrclk(HDMI_LRCLK),
+	.sdata(HDMI_I2S),
+
+	.left_chan (audio_l),
+	.right_chan(audio_r)
+);
+
+wire anl;
 
 sigma_delta_dac #(15) dac_l
 (
@@ -596,6 +643,7 @@ sigma_delta_dac #(15) dac_l
 	.DACout(anl)
 );
 
+wire anr;
 sigma_delta_dac #(15) dac_r
 (
 	.CLK(clk_audio),
@@ -604,6 +652,7 @@ sigma_delta_dac #(15) dac_r
 	.DACout(anr)
 );
 
+wire aspdif;
 spdif toslink
 (
 	.clk_i(clk_audio),
@@ -617,50 +666,37 @@ spdif toslink
 	.spdif_o(aspdif)
 );
 
-assign AUDIO_SPDIF = SW[0] ? HDMI_LRCLK : aspdif;
-assign AUDIO_R     = SW[0] ? HDMI_I2S   : anr;
-assign AUDIO_L     = SW[0] ? HDMI_SCLK  : anl;
+wire [15:0] audio_l, audio_l_pre;
+aud_mix_top audmix_l
+(
+	.clk(clk_audio),
+	.att(vol_att),
+	.mix(audio_mix),
+	.is_signed(audio_s),
 
-reg signed [15:0] audio_l;
-reg signed [15:0] audio_r;
+	.core_audio(audio_ls),
+	.pre_in(audio_r_pre),
+	.linux_audio(alsa_l),
 
-always @(posedge clk_audio) begin
-	reg signed [16:0] als, al, acl, apl;
-	reg signed [16:0] ars, ar, acr, apr;
+	.pre_out(audio_l_pre),
+	.out(audio_l)
+);
 
-	{acl,acr} <= audio_s ? {audio_ls[15],audio_ls,audio_rs[15],audio_rs}: 
-	                       {2'b00,audio_ls[15:1],  2'b00,audio_rs[15:1]};
+wire [15:0] audio_r, audio_r_pre;
+aud_mix_top audmix_r
+(
+	.clk(clk_audio),
+	.att(vol_att),
+	.mix(audio_mix),
+	.is_signed(audio_s),
 
-	als <= acl + {alsa_l[15],alsa_l};
-	ars <= acr + {alsa_r[15],alsa_r};
+	.core_audio(audio_rs),
+	.pre_in(audio_l_pre),
+	.linux_audio(alsa_r),
 
-	case(audio_mix)
-		0: al <= als;
-		1: al <= als - (als >>> 3) + (ars >>> 3);
-		2: al <= als - (als >>> 2) + (ars >>> 2);
-		3: al <= (als >>> 1) + (ars >>> 1);
-	endcase
-
-	case(audio_mix)
-		0: ar <= ars;
-		1: ar <= ars - (ars >>> 3) + (als >>> 3);
-		2: ar <= ars - (ars >>> 2) + (als >>> 2);
-		3: ar <= (ars >>> 1) + (als >>> 1);
-	endcase
-	
-	if(vol_att[4]) begin
-		apl <= 0;
-		apr <= 0;
-	end
-	else
-	begin
-		apl <= al >>> vol_att[3:0];
-		apr <= ar >>> vol_att[3:0];
-	end
-
-	audio_l <= ($signed(apl) > $signed(17'd32767)) ? 16'd32767 : ($signed(apl) < $signed(-17'd32768)) ? -16'd32768 : apl[15:0];
-	audio_r <= ($signed(apr) > $signed(17'd32767)) ? 16'd32767 : ($signed(apr) < $signed(-17'd32768)) ? -16'd32768 : apr[15:0];
-end
+	.pre_out(audio_r_pre),
+	.out(audio_r)
+);
 
 wire [28:0] aram_address;
 wire  [7:0] aram_burstcount;
@@ -669,7 +705,7 @@ wire [63:0] aram_readdata;
 wire        aram_readdatavalid;
 wire        aram_read;
 
-wire signed [15:0] alsa_l, alsa_r;
+wire [15:0] alsa_l, alsa_r;
 
 alsa alsa
 (
@@ -691,6 +727,17 @@ alsa alsa
 	.pcm_r(alsa_r)
 );
 
+
+////////////////  User I/O (USB 3.0 connector) /////////////////////////
+
+assign USER_IO[0] = 1'bZ;
+assign USER_IO[1] = 1'bZ;
+assign USER_IO[2] = (SW[1] & ~HDMI_I2S)   ? 1'b0 : 1'bZ;
+assign USER_IO[3] = 1'bZ;
+assign USER_IO[4] = (SW[1] & ~HDMI_SCLK)  ? 1'b0 : 1'bZ;
+assign USER_IO[5] = (SW[1] & ~HDMI_LRCLK) ? 1'b0 : 1'bZ;
+
+
 ///////////////////  User module connection ////////////////////////////
 
 wire [15:0] audio_ls, audio_rs;
@@ -700,6 +747,7 @@ wire  [7:0] r_out, g_out, b_out;
 wire        vs, hs, de;
 wire        clk_sys, clk_vid, ce_pix;
 wire  [2:0] patt;
+wire        dim;
 wire        reset_hdmi;
 
 wire        ram_clk;
@@ -728,6 +776,7 @@ wire        uart_rts;
 wire        uart_rxd;
 wire        uart_txd;
 
+
 emu emu
 (
 	.CLK_50M(FPGA_CLK3_50),
@@ -751,6 +800,7 @@ emu emu
 	.LED_DISK(led_disk),
 
 	.PATTERN(patt),
+	.DIM(dim),
 
 	.AUDIO_L(audio_ls),
 	.AUDIO_R(audio_rs),
@@ -797,6 +847,8 @@ emu emu
 
 endmodule
 
+/////////////////////////////////////////////////////////////////////
+
 module sync_fix
 (
 	input clk,
@@ -822,6 +874,101 @@ always @(posedge clk) begin
 	if(s2 != s1) cnt <= 0;
 
 	pol <= pos > neg;
+end
+
+endmodule
+
+/////////////////////////////////////////////////////////////////////
+
+module aud_mix_top
+(
+	input             clk,
+
+	input       [4:0] att,
+	input       [1:0] mix,
+	input             is_signed,
+
+	input      [15:0] core_audio,
+	input      [15:0] linux_audio,
+	input      [15:0] pre_in,
+
+	output reg [15:0] pre_out,
+	output reg [15:0] out
+);
+
+reg [15:0] ca;
+always @(posedge clk) begin
+	reg [15:0] d1,d2,d3;
+
+	d1 <= core_audio; d2<=d1; d3<=d2;
+	if(d2 == d3) ca <= d2;
+end
+
+always @(posedge clk) begin
+	reg signed [16:0] a1, a2, a3, a4;
+
+	a1 <= is_signed ? {ca[15],ca} : {2'b00,ca[15:1]};
+	a2 <= a1 + {linux_audio[15],linux_audio};
+
+	pre_out <= a2[16:1];
+
+	case(mix)
+		0: a3 <= a2;
+		1: a3 <= $signed(a2) - $signed(a2[16:3]) + $signed(pre_in[15:2]);
+		2: a3 <= $signed(a2) - $signed(a2[16:2]) + $signed(pre_in[15:1]);
+		3: a3 <= {a2[16],a2[16:1]} + {pre_in[15],pre_in};
+	endcase
+
+	if(att[4]) a4 <= 0;
+	else a4 <= a3 >>> att[3:0];
+
+	//clamping
+	out <= ^a4[16:15] ? {a4[16],{15{a4[15]}}} : a4[15:0];
+end
+
+endmodule
+
+/////////////////////////////////////////////////////////////////////
+
+module vid_dim
+(
+	input clk,
+
+	input [7:0] r_in,g_in,b_in,
+	input de_in,
+	input hs_in,
+	input vs_in,
+
+	output reg [7:0] r_out,g_out,b_out,
+	output reg de_out,
+	output reg hs_out,
+	output reg vs_out,
+
+	input dim
+);
+
+always @(posedge clk) begin
+	reg hs_in1,vs_in1;
+
+	//compensate osd
+	hs_in1 <= hs_in;
+	vs_in1 <= vs_in;
+
+	hs_out <= hs_in1;
+	vs_out <= vs_in1;
+	
+	de_out <= de_in;
+	
+	if(dim) begin
+		r_out <= r_in[7:2];
+		g_out <= g_in[7:2];
+		b_out <= b_in[7:2];
+	end
+	else begin
+		r_out <= r_in;
+		g_out <= g_in;
+		b_out <= b_in;
+	end
 end
 
 endmodule

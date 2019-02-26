@@ -9,16 +9,16 @@ module pattern_vg
 	input              reset, clk_in,
 	input [X_BITS-1:0] x,
 	input [Y_BITS-1:0] y,
-	input              vn_in, hn_in, dn_in,
-	output reg         vn_out, hn_out, den_out,
-	output reg [B-1:0] r_out, g_out, b_out,
-	input [X_BITS-1:0] total_active_pix,
-	input [Y_BITS-1:0] total_active_lines,
+	input              vs_in, hs_in, de_in,
+	output reg         vs_out, hs_out, de_out,
+	output reg [B-1:0] r, g, b,
+	input [X_BITS-1:0] width,
+	input [Y_BITS-1:0] height,
 	input        [2:0] pattern
 );
 	
-reg [Y_BITS+2:0] bar;
-reg [X_BITS+7:0] ramp;
+reg [Y_BITS-1:0] ramp_y;
+reg [X_BITS-1:0] ramp_x;
 reg [X_BITS+9:0] cosx;
 
 wire [63:0] rnd;
@@ -33,95 +33,149 @@ cos cos(cosx[9:0], cos_out);
 wire [7:0] noise = (cos_g >= rnd_reg) ? {cos_g - rnd_reg, 2'b00} : 8'd0;
 
 reg [9:0] vvc = 0;
-always @(negedge clk_in) begin
-	reg div;
-	reg [Y_BITS-1:0] x1;
-	reg [X_BITS-1:0] y1;
-
-	div <= ~div;
-	
-	if(!div) begin
-		x1 <= x;
-		y1 <= y;
-		if(pattern[0]) begin
-			bar <= ~den_out ? 1'b0 : {y1,3'b000}/total_active_lines;
-			ramp <= {x1,8'h00}/total_active_pix;
-		end else begin
-			bar <= ~den_out ? 1'b0 : {x1,3'b000}/total_active_pix;
-			ramp <= ~({y1,8'h00}/total_active_lines);
-		end
-	end
-
-	cosx <= vvc + ({y,10'd0}/total_active_lines);
-end
+always @(posedge clk_in) cosx <= vvc + ({y,10'd0}/height);
 
 always @(posedge clk_in) begin
-	if(!x && !y && dn_in) vvc <= vvc + 9'd6;
+	reg [X_BITS-1:0] acc_x,step_x,add_x;
+	reg [Y_BITS-1:0] acc_y,step_y,add_y;
+	reg old_hs;
+
+	if(vs_in) begin
+		add_x <= pattern[1] ? 10'd14 : 10'd255;
+		add_y <= pattern[1] ? 10'd255 : 10'd14;
+	end
+
+	ramp_x <= step_x;
+	ramp_y <= step_y;
+
+	acc_x = acc_x + add_x;
+	if(acc_x >= width) begin
+		acc_x = acc_x - width;
+		step_x <= step_x + 1'd1;
+	end
+
+	if(!x) begin
+		acc_x = 0;
+		step_x <= 0;
+		ramp_x <= 0;
+	end
+
+	old_hs <= hs_in;
+	if(old_hs & ~hs_in) begin
+		acc_y = acc_y + add_y;
+		if(acc_y >= height) begin
+			acc_y = acc_y - height;
+			step_y <= step_y + 1'd1;
+		end
+
+		if(!y) begin
+			acc_y = 0;
+			step_y <= 0;
+			ramp_y <= 0;
+		end
+	end
+end
+
+wire [X_BITS-1:0] inv_ramp_x = 8'd13 - ramp_x;
+wire [Y_BITS-1:0] inv_ramp_y = 8'd13 - ramp_y;
+
+always @(posedge clk_in) begin
+	if(!x && !y && de_in) vvc <= vvc + 9'd6;
 	if(!x) cos_g <= {1'b1, cos_out[7:3]};
 
 	if(x[1:0] == 0) rnd_reg <= rnd_c;
 
-	vn_out <= vn_in;
-	hn_out <= hn_in;
-	den_out <= dn_in;
+	vs_out <= vs_in;
+	hs_out <= hs_in;
+	de_out <= de_in;
 	
 	case(pattern)
 		// TV noise
 		0: if(&x[1:0]) begin
-				r_out <= noise;
-				g_out <= noise;
-				b_out <= noise;
+				r <= noise;
+				g <= noise;
+				b <= noise;
 			end
 
 		// black
 		1:	begin
-				r_out <= 0;
-				g_out <= 0;
-				b_out <= 0;
+				r <= 0;
+				g <= 0;
+				b <= 0;
 			end
 
 		// border
-		2: if (dn_in && ((y == 12'b0) || (x == 12'b0) || (x == total_active_pix - 1) || (y == total_active_lines - 1)))
+		2: if (de_in && ((y == 12'b0) || (x == 12'b0) || (x == width - 1) || (y == height - 1)))
 			begin
-				r_out <= 8'hFF;
-				g_out <= 8'hFF;
-				b_out <= 8'hFF;
+				r <= 8'hFF;
+				g <= 8'hFF;
+				b <= 8'hFF;
 			end
 			else
-			if (dn_in && ((y == 12'b0+20) || (x == 12'b0+20) || (x == total_active_pix - 1 - 20) || (y == total_active_lines - 1 - 20)))
+			if (de_in && ((y == 12'b0+20) || (x == 12'b0+20) || (x == width - 1 - 20) || (y == height - 1 - 20)))
 			begin
-				r_out <= 8'h80;
-				g_out <= 8'h80;
-				b_out <= 8'h80;
+				r <= 8'h80;
+				g <= 8'h80;
+				b <= 8'h80;
 			end
 			else
 			begin
-				r_out <= 0;
-				g_out <= 0;
-				b_out <= 0;
+				r <= 0;
+				g <= 0;
+				b <= 0;
 			end
 
 		// stripes
-		3:	if ((dn_in) && y[2])
+		3:	if ((de_in) && y[2])
 			begin
-				r_out <= 8'h80;
-				g_out <= 8'h80;
-				b_out <= 8'h80;
+				r <= 8'h80;
+				g <= 8'h80;
+				b <= 8'h80;
 			end
 			else
 			begin
-				r_out <= 8'hC0;
-				g_out <= 8'hC0;
-				b_out <= 8'hC0;
+				r <= 8'hC0;
+				g <= 8'hC0;
+				b <= 8'hC0;
 			end
 
-		// Simple RAMPs
-		4,5: begin
-				r_out <= (bar[0]) ? ramp[7:0] : 8'h00;
-				g_out <= (bar[1]) ? ramp[7:0] : 8'h00;
-				b_out <= (bar[2]) ? ramp[7:0] : 8'h00;
+		4: begin
+				if(~ramp_y[0]) begin
+					r <= ramp_y[1] ? 8'h00 : ramp_x[7:0];
+					g <= ramp_y[2] ? 8'h00 : ramp_x[7:0];
+					b <= ramp_y[3] ? 8'h00 : ramp_x[7:0];
+				end
+				else begin
+					r <= inv_ramp_y[1] ? 8'h00 : ~ramp_x[7:0];
+					g <= inv_ramp_y[2] ? 8'h00 : ~ramp_x[7:0];
+					b <= inv_ramp_y[3] ? 8'h00 : ~ramp_x[7:0];
+				end
 			end
 
+		5: begin
+				r <= ramp_y[1] ? 8'h00 : ~ramp_x[7:0];
+				g <= ramp_y[2] ? 8'h00 : ~ramp_x[7:0];
+				b <= ramp_y[3] ? 8'h00 : ~ramp_x[7:0];
+			end
+
+		6: begin
+				if(~ramp_x[0]) begin
+					r <= ramp_x[1] ? 8'h00 : ramp_y[7:0];
+					g <= ramp_x[2] ? 8'h00 : ramp_y[7:0];
+					b <= ramp_x[3] ? 8'h00 : ramp_y[7:0];
+				end
+				else begin
+					r <= inv_ramp_x[1] ? 8'h00 : ~ramp_y[7:0];
+					g <= inv_ramp_x[2] ? 8'h00 : ~ramp_y[7:0];
+					b <= inv_ramp_x[3] ? 8'h00 : ~ramp_y[7:0];
+				end
+			end
+
+		7: begin
+				r <= ramp_x[1] ? 8'h00 : ~ramp_y[7:0];
+				g <= ramp_x[2] ? 8'h00 : ~ramp_y[7:0];
+				b <= ramp_x[3] ? 8'h00 : ~ramp_y[7:0];
+			end
 	endcase
 end
 

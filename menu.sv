@@ -73,6 +73,7 @@ module emu
 	input         SD_CD,
 
 	output  [2:0] PATTERN,
+	output reg    DIM,
 
 	//High latency DDR3 RAM interface
 	//Use for non-critical time purposes
@@ -140,6 +141,7 @@ localparam CONF_STR = {
 wire forced_scandoubler;
 wire  [1:0] buttons;
 wire [31:0] status;
+wire [10:0] ps2_key;
 
 hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 (
@@ -151,13 +153,28 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 
 	.buttons(buttons),
 	.status(status),
-
-	.ps2_kbd_led_use(0),
-	.ps2_kbd_led_status(0)
+	
+	.ps2_key(ps2_key)
 );
 
 assign RESET_OUT = buttons[1];
 assign PATTERN = status[3:1];
+
+always @(posedge CLK_50M) begin
+	integer sec, to;
+	reg old_stb;
+	
+	sec <= sec + 1;
+	if(sec >= 50000000) begin
+		sec <= 0;
+		to <= to + 1;
+	end
+
+	DIM <= (to >= 120);
+
+	old_stb <= ps2_key[10];
+	if((old_stb ^ ps2_key[10]) || status[0] || buttons[1]) to <= 0;
+end
 
 
 ////////////////////   CLOCKS   ///////////////////
