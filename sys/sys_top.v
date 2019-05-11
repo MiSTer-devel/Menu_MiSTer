@@ -194,11 +194,12 @@ reg [15:0] cfg;
 reg        cfg_got   = 0;
 reg        cfg_set   = 0;
 //wire [2:0] hdmi_res  = cfg[10:8];
-wire       dvi_mode  = cfg[7];
-wire       audio_96k = cfg[6];
-wire       ypbpr_en  = cfg[5];
-wire       csync     = cfg[3];
-wire       vga_scaler= cfg[2];
+wire       hdmi_limited = cfg[8];
+wire       dvi_mode     = cfg[7];
+wire       audio_96k    = cfg[6];
+wire       ypbpr_en     = cfg[5];
+wire       csync        = cfg[3];
+wire       vga_scaler   = cfg[2];
 
 reg        cfg_custom_t = 0;
 reg  [5:0] cfg_custom_p1;
@@ -511,7 +512,8 @@ hdmi_config hdmi_config
 	.I2C_SDA(HDMI_I2C_SDA),
 
 	.dvi_mode(dvi_mode),
-	.audio_96k(audio_96k)
+	.audio_96k(audio_96k),
+	.hdmi_limited(hdmi_limited)
 );
 
 wire [23:0] hdmi_data,hdmi_data2;
