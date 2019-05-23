@@ -13,7 +13,8 @@ module osd
 	input  [23:0] din,
 	output [23:0] dout,
 	input         de_in,
-	output reg    de_out
+	output reg    de_out,
+	output        osd_status
 );
 
 parameter  OSD_COLOR    =  3'd4;
@@ -22,6 +23,8 @@ parameter  OSD_Y_OFFSET = 12'd0;
 
 localparam OSD_WIDTH    = 12'd256;
 localparam OSD_HEIGHT   = 12'd64;
+
+assign osd_status = 1;
 
 reg osd_enable;
 (* ramstyle = "no_rw_check" *) reg  [7:0] osd_buffer[4096+1024];

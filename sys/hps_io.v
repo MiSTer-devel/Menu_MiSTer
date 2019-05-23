@@ -33,17 +33,17 @@
 module hps_io #(parameter STRLEN=0, PS2DIV=2000, WIDE=0, VDNUM=1, PS2WE=0)
 (
 	input             clk_sys,
-	inout      [44:0] HPS_BUS,
+	inout      [45:0] HPS_BUS,
 
 	// parameter STRLEN and the actual length of conf_str have to match
 	input [(8*STRLEN)-1:0] conf_str,
 
-	output reg [15:0] joystick_0,
-	output reg [15:0] joystick_1,
-	output reg [15:0] joystick_2,
-	output reg [15:0] joystick_3,
-	output reg [15:0] joystick_4,
-	output reg [15:0] joystick_5,
+	output reg [31:0] joystick_0,
+	output reg [31:0] joystick_1,
+	output reg [31:0] joystick_2,
+	output reg [31:0] joystick_3,
+	output reg [31:0] joystick_4,
+	output reg [31:0] joystick_5,
 	output reg [15:0] joystick_analog_0,
 	output reg [15:0] joystick_analog_1,
 	output reg [15:0] joystick_analog_2,
@@ -57,6 +57,7 @@ module hps_io #(parameter STRLEN=0, PS2DIV=2000, WIDE=0, VDNUM=1, PS2WE=0)
 	output reg [31:0] status,
 	input      [31:0] status_in,
 	input             status_set,
+	input      [15:0] status_menumask,
 
 	//toggle to force notify of video mode change
 	input             new_vmode,
@@ -173,15 +174,18 @@ wire de      = HPS_BUS[40];
 wire hs      = HPS_BUS[39];
 wire vs      = HPS_BUS[38];
 wire vs_hdmi = HPS_BUS[44];
+wire f1      = HPS_BUS[45];
 
 reg [31:0] vid_hcnt = 0;
 reg [31:0] vid_vcnt = 0;
 reg  [7:0] vid_nres = 0;
+reg  [1:0] vid_int  = 0;
 integer hcnt;
 
 always @(posedge clk_vid) begin
 	integer vcnt;
 	reg old_vs= 0, old_de = 0, old_vmode = 0;
+	reg [3:0] resto = 0;
 	reg calch = 0;
 
 	if(ce_pix) begin
@@ -193,15 +197,22 @@ always @(posedge clk_vid) begin
 		if(old_de & ~de) calch <= 0;
 
 		if(old_vs & ~vs) begin
-			if(hcnt && vcnt) begin
-				old_vmode <= new_vmode;
-				if(vid_hcnt != hcnt || vid_vcnt != vcnt || old_vmode != new_vmode) vid_nres <= vid_nres + 1'd1;
-				vid_hcnt <= hcnt;
-				vid_vcnt <= vcnt;
+			vid_int <= {vid_int[0],f1};
+			if(~f1) begin
+				if(hcnt && vcnt) begin
+					old_vmode <= new_vmode;
+
+					//report new resolution after timeout
+					if(resto) resto <= resto + 1'd1;
+					if(vid_hcnt != hcnt || vid_vcnt != vcnt || old_vmode != new_vmode) resto <= 1;
+					if(&resto) vid_nres <= vid_nres + 1'd1;
+					vid_hcnt <= hcnt;
+					vid_vcnt <= vcnt;
+				end
+				vcnt <= 0;
+				hcnt <= 0;
+				calch <= 1;
 			end
-			vcnt <= 0;
-			hcnt <= 0;
-			calch <= 1;
 		end
 	end
 end
@@ -321,6 +332,7 @@ always@(posedge clk_sys) begin
 					'h18: sd_ack <= 1;
 					'h29: io_dout <= {4'hA, stflg};
 					'h2B: io_dout <= 1;
+					'h2F: io_dout <= 1;
 				endcase
 
 				sd_buff_addr <= 0;
@@ -330,13 +342,13 @@ always@(posedge clk_sys) begin
 
 				case(cmd)
 					// buttons and switches
-					'h01: cfg        <= io_din[7:0];
-					'h02: joystick_0 <= io_din;
-					'h03: joystick_1 <= io_din;
-					'h10: joystick_2 <= io_din;
-					'h11: joystick_3 <= io_din;
-					'h12: joystick_4 <= io_din;
-					'h13: joystick_5 <= io_din;
+					'h01: cfg <= io_din[7:0];
+					'h02: if(byte_cnt==1) joystick_0[15:0] <= io_din; else joystick_0[31:16] <= io_din;
+					'h03: if(byte_cnt==1) joystick_1[15:0] <= io_din; else joystick_1[31:16] <= io_din;
+					'h10: if(byte_cnt==1) joystick_2[15:0] <= io_din; else joystick_2[31:16] <= io_din;
+					'h11: if(byte_cnt==1) joystick_3[15:0] <= io_din; else joystick_3[31:16] <= io_din;
+					'h12: if(byte_cnt==1) joystick_4[15:0] <= io_din; else joystick_4[31:16] <= io_din;
+					'h13: if(byte_cnt==1) joystick_5[15:0] <= io_din; else joystick_5[31:16] <= io_din;
 
 					// store incoming ps2 mouse bytes
 					'h04: begin
@@ -432,7 +444,7 @@ always@(posedge clk_sys) begin
 
 					//Video res.
 					'h23: case(byte_cnt)
-								1: io_dout <= vid_nres;
+								1: io_dout <= {|vid_int, vid_nres};
 								2: io_dout <= vid_hcnt[15:0];
 								3: io_dout <= vid_hcnt[31:16];
 								4: io_dout <= vid_vcnt[15:0];
@@ -458,6 +470,9 @@ always@(posedge clk_sys) begin
 								1: io_dout <= status_req[15:0];
 								2: io_dout <= status_req[31:16];
 							endcase
+					
+					//menu mask
+					'h2E: if(byte_cnt == 1) io_dout <= status_menumask;
 				endcase
 			end
 		end

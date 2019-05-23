@@ -101,7 +101,7 @@ begin
 			old_we <= we;
 			busy   <= 0;
 
-			if(~old_we && we)
+			if(~old_we && we && addr[28:26])
 			begin
 				ram_cache[{addr[2:0], 3'b000} +:8] <= din;
 				ram_address <= addr;

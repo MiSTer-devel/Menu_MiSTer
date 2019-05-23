@@ -1,7 +1,7 @@
 //============================================================================
 //
 //  Menu for MiSTer.
-//  Copyright (C) 2017,2018 Sorgelig
+//  Copyright (C) 2017-2019 Sorgelig
 //
 //
 //  This program is free software; you can redistribute it and/or modify it
@@ -27,10 +27,9 @@ module emu
 	//Async reset from top-level module.
 	//Can be used as initial reset.
 	input         RESET,
-	output        RESET_OUT,
 
 	//Must be passed to hps_io module
-	inout  [44:0] HPS_BUS,
+	inout  [45:0] HPS_BUS,
 
 	//Base video clock. Usually equals to CLK_SYS.
 	output        CLK_VIDEO,
@@ -43,13 +42,14 @@ module emu
 	output  [7:0] VIDEO_ARX,
 	output  [7:0] VIDEO_ARY,
 
-	input         PAL,
 	output  [7:0] VGA_R,
 	output  [7:0] VGA_G,
 	output  [7:0] VGA_B,
 	output        VGA_HS,
 	output        VGA_VS,
 	output        VGA_DE,    // = ~(VBlank | HBlank)
+	output        VGA_F1,
+	output [1:0]  VGA_SL,
 
 	output        LED_USER,  // 1 - ON, 0 - OFF.
 
@@ -61,9 +61,11 @@ module emu
 
 	output [15:0] AUDIO_L,
 	output [15:0] AUDIO_R,
-	output        AUDIO_S,   // 1 - signed audio samples, 0 - unsigned
+	output        AUDIO_S, // 1 - signed audio samples, 0 - unsigned
 	output  [1:0] AUDIO_MIX, // 0 - no mix, 1 - 25%, 2 - 50%, 3 - 100% (mono)
-	input         TAPE_IN,
+
+	//ADC
+	inout   [3:0] ADC_BUS,
 
 	// SD-SPI
 	output        SD_SCK,
@@ -71,9 +73,6 @@ module emu
 	input         SD_MISO,
 	output        SD_CS,
 	input         SD_CD,
-
-	output  [2:0] PATTERN,
-	output reg    DIM,
 
 	//High latency DDR3 RAM interface
 	//Use for non-critical time purposes
@@ -100,23 +99,37 @@ module emu
 	output        SDRAM_nCAS,
 	output        SDRAM_nRAS,
 	output        SDRAM_nWE,
-	
+
 	input         UART_CTS,
 	output        UART_RTS,
 	input         UART_RXD,
 	output        UART_TXD,
 	output        UART_DTR,
-	input         UART_DSR
+	input         UART_DSR,
+
+	// Open-drain User port.
+	// 0 - D+/RX
+	// 1 - D-/TX
+	// 2..5 - USR1..USR4
+	// Set USER_OUT to 1 to read from USER_IN.
+	input   [5:0] USER_IN,
+	output  [5:0] USER_OUT,
+
+	input         OSD_STATUS
 );
 
+assign ADC_BUS  = 'Z;
+assign USER_OUT = '1;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 
 assign DDRAM_CLK = clk_sys;
 assign CE_PIXEL  = ce_pix;
 
-assign VIDEO_ARX = 16;
-assign VIDEO_ARY = 9;
+assign VGA_SL = 0;
+assign VGA_F1 = 0;
+assign VIDEO_ARX = 0;
+assign VIDEO_ARY = 0;
 
 assign AUDIO_S = 0;
 assign AUDIO_L = 0;
@@ -157,9 +170,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 	.ps2_key(ps2_key)
 );
 
-assign RESET_OUT = buttons[1];
-assign PATTERN = status[3:1];
-
+/*
 always @(posedge CLK_50M) begin
 	integer sec, to;
 	reg old_stb;
@@ -175,7 +186,7 @@ always @(posedge CLK_50M) begin
 	old_stb <= ps2_key[10];
 	if((old_stb ^ ps2_key[10]) || status[0] || buttons[1]) to <= 0;
 end
-
+*/
 
 ////////////////////   CLOCKS   ///////////////////
 wire locked, clk_sys;
@@ -234,6 +245,8 @@ end
 
 
 /////////////////////   VIDEO   ///////////////////
+
+wire PAL = status[4];
 
 reg   [9:0] hc;
 reg   [9:0] vc;
