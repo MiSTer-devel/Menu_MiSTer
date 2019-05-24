@@ -347,6 +347,11 @@ cyclonev_hps_interface_peripheral_spi_master spi
 	.ss_in_n(1)
 );
 
+wire [63:0] f2h_irq = {HDMI_TX_VS};
+cyclonev_hps_interface_interrupts interrupts
+(
+	.irq(f2h_irq)
+);
 
 ///////////////////////////  RESET  ///////////////////////////////////
 
