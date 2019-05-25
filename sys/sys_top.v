@@ -552,6 +552,8 @@ always @(posedge clk_vid) begin
 				hmax <= WIDTH - 1'd1;
 				vmin <= 0;
 				vmax <= HEIGHT - 1'd1;
+				wcalc<= WIDTH;
+				hcalc<= HEIGHT;
 				state<= 0;
 			end
 		6: begin
