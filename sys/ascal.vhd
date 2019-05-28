@@ -566,23 +566,23 @@ ARCHITECTURE rtl OF ascal IS
   BEGIN
     CASE format IS
       WHEN "000" => -- 16bpp 1555
-        RETURN (r=>shift(9 TO 13) & shift(11 TO 13),
+        RETURN (b=>shift(9 TO 13) & shift(9 TO 11),
                 g=>shift(14 TO 15) & shift(0 TO 2) & shift(14 TO 15) & shift(0),
-                b=>shift(3 TO 7) & shift(3 TO 5));
+                r=>shift(3 TO 7) & shift(3 TO 5));
       WHEN "001"|"010" => -- 24bpp / 32bpp
         RETURN (r=>shift(0 TO 7),g=>shift(8 TO 15),b=>shift(16 TO 23));
       WHEN "011" => -- 16bpp 565
-        RETURN (r=>shift(9 TO 13) & shift(11 TO 13),
-                g=>shift(14 TO 15) & shift(0 TO 3) & shift(14 TO 15),
-                b=>shift(4 TO 8) & shift(4 TO 6));
-      WHEN "100" => -- 16bpp 1555
-        RETURN (b=>shift(9 TO 13) & shift(11 TO 13),
-                g=>shift(14 TO 15) & shift(0 TO 2) & shift(14 TO 15) & shift(0),
+        RETURN (b=>shift(8 TO 12) & shift(8 TO 10),
+                g=>shift(13 TO 15) & shift(0 TO 2) & shift(13 TO 14),
                 r=>shift(3 TO 7) & shift(3 TO 5));
+      WHEN "100" => -- 16bpp 1555
+        RETURN (r=>shift(9 TO 13) & shift(9 TO 11),
+                g=>shift(14 TO 15) & shift(0 TO 2) & shift(14 TO 15) & shift(0),
+                b=>shift(3 TO 7) & shift(3 TO 5));
       WHEN "111" => -- 16bpp 565
-        RETURN (b=>shift(9 TO 13) & shift(11 TO 13),
-                g=>shift(14 TO 15) & shift(0 TO 3) & shift(14 TO 15),
-                r=>shift(4 TO 8) & shift(4 TO 6));
+        RETURN (r=>shift(8 TO 12) & shift(8 TO 10),
+                g=>shift(13 TO 15) & shift(0 TO 2) & shift(13 TO 14),
+                b=>shift(3 TO 7) & shift(3 TO 5));
       WHEN OTHERS => -- 24bpp / 32bpp
         RETURN (b=>shift(0 TO 7),g=>shift(8 TO 15),r=>shift(16 TO 23));
     END CASE;
