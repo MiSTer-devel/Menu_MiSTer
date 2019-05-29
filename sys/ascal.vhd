@@ -146,10 +146,10 @@ ENTITY ascal IS
     
     ------------------------------------
     -- Framebuffer mode
-    o_fb_ena    : IN std_logic; -- Enable Framebuffer Mode
-    o_fb_hsize  : IN natural RANGE 0 TO 4095;
-    o_fb_vsize  : IN natural RANGE 0 TO 4095;
-    o_fb_format : IN unsigned(2 DOWNTO 0); --  00=16bpp, 01=24bpp, 10=32bpp, bit2: R/B, B/R
+    o_fb_ena    : IN std_logic :='0'; -- Enable Framebuffer Mode
+    o_fb_hsize  : IN natural RANGE 0 TO 4095 :=0;
+    o_fb_vsize  : IN natural RANGE 0 TO 4095 :=0;
+    o_fb_format : IN unsigned(2 DOWNTO 0) :="001"; --  00=16bpp, 01=24bpp, 10=32bpp, bit2: R/B, B/R
     o_fb_base   : IN unsigned(31 DOWNTO 0) :=x"0000_0000";
     
     ------------------------------------
@@ -268,7 +268,7 @@ ARCHITECTURE rtl OF ascal IS
   
   ----------------------------------------------------------
   -- Input image
-  SIGNAL i_pvs,i_phs,i_pfl,i_pde,i_pce : std_logic;
+  SIGNAL i_pvs,i_pfl,i_pde,i_pce : std_logic;
   SIGNAL i_ppix : type_pix;
   SIGNAL i_freeze : std_logic;
   SIGNAL i_count : unsigned(2 DOWNTO 0);
@@ -282,7 +282,7 @@ ARCHITECTURE rtl OF ascal IS
   SIGNAL i_ven,i_sof : std_logic;
   SIGNAL i_wr : std_logic;
   SIGNAL i_divstart,i_divrun : std_logic;
-  SIGNAL i_de_pre,i_vs_pre,i_hs_pre,i_fl_pre : std_logic;
+  SIGNAL i_de_pre,i_vs_pre,i_fl_pre : std_logic;
   SIGNAL i_de_delay : natural RANGE 0 TO 31;
   SIGNAL i_intercnt : natural RANGE 0 TO 3;
   SIGNAL i_inter,i_half,i_flm : std_logic;
@@ -321,7 +321,7 @@ ARCHITECTURE rtl OF ascal IS
   SIGNAL i_hpixp,i_hpix0,i_hpix1,i_hpix2,i_hpix3,i_hpix4 : type_pix;
   SIGNAL i_hpix,i_pix : type_pix;
   SIGNAL i_hnp1,i_hnp2,i_hnp3,i_hnp4 : std_logic;
-  SIGNAL i_ven1,i_ven2,i_ven3,i_ven4,i_ven5,i_ven6,i_ven7 : std_logic;
+  SIGNAL i_ven1,i_ven2,i_ven3,i_ven4,i_ven5,i_ven6 : std_logic;
   
   ----------------------------------------------------------
   -- Avalon
@@ -330,15 +330,13 @@ ARCHITECTURE rtl OF ascal IS
   SIGNAL avl_write_i,avl_write_sync,avl_write_sync2 : std_logic;
   SIGNAL avl_read_i,avl_read_sync,avl_read_sync2 : std_logic;
   SIGNAL avl_read_pulse,avl_write_pulse : std_logic;
-  SIGNAL avl_reading : std_logic;
   SIGNAL avl_read_sr,avl_write_sr,avl_read_clr,avl_write_clr : std_logic;
   SIGNAL avl_rad,avl_rad_c,avl_wad : natural RANGE 0 TO 2*BLEN-1;
   SIGNAL avl_walt,avl_wline,avl_rline : std_logic;
   SIGNAL avl_dw,avl_dr : unsigned(N_DW-1 DOWNTO 0);
   SIGNAL avl_wr : std_logic;
-  SIGNAL avl_readack : std_logic;
+  SIGNAL avl_readdataack,avl_readack : std_logic;
   SIGNAL avl_radrs,avl_wadrs : unsigned(31 DOWNTO 0);
-  SIGNAL avl_rbib : std_logic;
   SIGNAL avl_i_offset0,avl_o_offset0 : unsigned(31 DOWNTO 0);
   SIGNAL avl_i_offset1,avl_o_offset1 : unsigned(31 DOWNTO 0);
   SIGNAL avl_reset_na : std_logic;
@@ -377,6 +375,7 @@ ARCHITECTURE rtl OF ascal IS
   TYPE type_o_state IS (sDISP,sHSYNC,sREAD,sWAITREAD);
   SIGNAL o_state : type_o_state;
   SIGNAL o_copy,o_readack,o_readack_sync,o_readack_sync2 : std_logic;
+  SIGNAL o_readdataack,o_readdataack_sync,o_readdataack_sync2 : std_logic;
   SIGNAL o_copyv : unsigned(0 TO 7);
   SIGNAL o_adrs : unsigned(31 DOWNTO 0); -- Avalon address
   SIGNAL o_adrs_pre : natural RANGE 0 TO 32*4096-1;
@@ -415,7 +414,7 @@ ARCHITECTURE rtl OF ascal IS
   SIGNAL o_alt,o_altx : unsigned(3 DOWNTO 0);
   SIGNAL o_hdown,o_vdown : std_logic;
   SIGNAL o_primv,o_lastv,o_bibv : unsigned(0 TO 2);
-  SIGNAL o_bibu,o_bib : std_logic :='0';
+  SIGNAL o_bibu : std_logic :='0';
   SIGNAL o_dcpt,o_dcpt1,o_dcpt2,o_dcpt3,o_dcpt4,o_dcpt5,o_dcpt6,o_dcpt7 : uint12;
   SIGNAL o_hpix0,o_hpix1,o_hpix2,o_hpix3 : type_pix;
   SIGNAL o_hpixq,o_vpixq,o_vpixq1 : arr_pix(0 TO 3);
@@ -430,21 +429,23 @@ ARCHITECTURE rtl OF ascal IS
   SIGNAL o_hacpt,o_vacpt : unsigned(11 DOWNTO 0);
   
   -----------------------------------------------------------------------------
-  
-  
   FUNCTION shift_ishift(shift : unsigned(0 TO 119);
                         pix   : type_pix;
                         format : unsigned(1 DOWNTO 0)) RETURN unsigned IS
   BEGIN
     CASE format IS
-      WHEN "00" | "11" => -- 16bpp
+      WHEN "00" => -- 16bpp 1555
         RETURN shift(16 TO 119) &
-          pix.g(5 DOWNTO 3) & pix.b(7 DOWNTO 3) &
-          '0' & pix.r(7 DOWNTO 3) & pix.g(7 DOWNTO 6);
+          pix.g(5 DOWNTO 3) & pix.r(7 DOWNTO 3) &
+          '0' & pix.b(7 DOWNTO 3) & pix.g(7 DOWNTO 6);
       WHEN "01" => -- 24bpp
         RETURN shift(24 TO 119) & pix.r & pix.g & pix.b;
-      WHEN OTHERS => -- 32bpp
+      WHEN "10" => -- 32bpp
         RETURN shift(32 TO 119) & pix.r & pix.g & pix.b & x"00";
+      WHEN OTHERS => -- 16bpp 565
+        RETURN shift(16 TO 119) &
+          pix.g(4 DOWNTO 2) & pix.r(7 DOWNTO 3) &
+          pix.b(7 DOWNTO 3) & pix.g(7 DOWNTO 5);
     END CASE;
   END FUNCTION;
   
@@ -457,11 +458,15 @@ ARCHITECTURE rtl OF ascal IS
   BEGIN
     dw:=i_dw;
     CASE format IS
-      WHEN "00" | "11" => -- 16bpp
+      WHEN "00" => -- 16bpp 1555
         IF (N_DW=128 AND (acpt MOD 8)=7) OR (N_DW=64 AND (acpt MOD 4)=3) THEN
-          dw:=shift(128-N_DW+8 TO 119) &
-               pix.g(5 DOWNTO 3) & pix.b(7 DOWNTO 3) &
-               '0' & pix.r(7 DOWNTO 3) & pix.g(7 DOWNTO 6);
+          dw:=shift(128-N_DW+8 TO 119) & pix.g(5 DOWNTO 3) & pix.r(7 DOWNTO 3) &
+               '0' & pix.b(7 DOWNTO 3) & pix.g(7 DOWNTO 6);
+        END IF;
+      WHEN "11" => -- 16bpp 565
+        IF (N_DW=128 AND (acpt MOD 8)=7) OR (N_DW=64 AND (acpt MOD 4)=3) THEN
+          dw:=shift(128-N_DW+8 TO 119) & pix.g(4 DOWNTO 2) & pix.r(7 DOWNTO 3) &
+               pix.b(7 DOWNTO 3) & pix.g(7 DOWNTO 5);
         END IF;
       WHEN "01" => -- 24bpp
         IF N_DW=128 THEN
@@ -967,7 +972,6 @@ BEGIN
       i_pfl<=i_fl;
       i_pde<=i_de;
       i_pce<=i_ce;
-      --i_phs<=i_hs;
       
       ------------------------------------------------------
       IF i_pce='1' THEN
@@ -975,7 +979,6 @@ BEGIN
         i_vs_pre<=i_pvs;
         i_de_pre<=i_pde;
         i_fl_pre<=i_pfl;
-        --i_hs_pre<=i_phs;
         
         ----------------------------------------------------
         -- Detect interlaced video
@@ -1135,7 +1138,7 @@ BEGIN
         
         i_hnp1<=i_hnp;  i_hnp2<=i_hnp1; i_hnp3<=i_hnp2; i_hnp4<=i_hnp3; 
         i_ven1<=i_ven;  i_ven2<=i_ven1; i_ven3<=i_ven2; i_ven4<=i_ven3;
-        i_ven5<=i_ven4; i_ven6<=i_ven5; --i_ven7<=i_ven6;
+        i_ven5<=i_ven4; i_ven6<=i_ven5;
         
         -- C1 : DIV 1. Pipelined 4 bits non-restoring divider
         dir_v:=x"000";
@@ -1426,10 +1429,10 @@ BEGIN
   Avaloir:PROCESS(avl_clk,avl_reset_na) IS
   BEGIN
     IF avl_reset_na='0' THEN
-      avl_reading<='0';
       avl_state<=sIDLE;
       avl_write_sr<='0';
       avl_read_sr<='0';
+      avl_readdataack<='0';
       avl_readack<='0';
       
     ELSIF rising_edge(avl_clk) THEN
@@ -1447,7 +1450,6 @@ BEGIN
       avl_read_sync<=o_read; -- <ASYNC>
       avl_read_sync2<=avl_read_sync;
       avl_read_pulse<=avl_read_sync XOR avl_read_sync2;
-      avl_rbib  <=o_bib;
       avl_radrs <=o_adrs AND (RAMSIZE - 1); -- <ASYNC>
       avl_rline <=o_rline; -- <ASYNC>
       
@@ -1457,10 +1459,15 @@ BEGIN
       
       avl_fb_ena<=o_fb_ena; -- <ASYNC>
       IF avl_fb_ena='0' THEN
-        avl_o_offset0<=buf_offset(o_obuf0,RAMBASE,RAMSIZE);  -- <ASYNC>
-        avl_o_offset1<=buf_offset(o_obuf1,RAMBASE,RAMSIZE);  -- <ASYNC>
+        IF HEADER THEN
+          avl_o_offset0<=buf_offset(o_obuf0,RAMBASE,RAMSIZE) + N_BURST;  -- <ASYNC>
+          avl_o_offset1<=buf_offset(o_obuf1,RAMBASE,RAMSIZE) + N_BURST;  -- <ASYNC>
+        ELSE
+          avl_o_offset0<=buf_offset(o_obuf0,RAMBASE,RAMSIZE);  -- <ASYNC>
+          avl_o_offset1<=buf_offset(o_obuf1,RAMBASE,RAMSIZE);  -- <ASYNC>
+        END IF;
       ELSIF avl_o_vs_sync='0' AND avl_o_vs='1' THEN
-         -- Copy framebuffer base address at VS falling edge
+        -- Copy framebuffer base address at VS falling edge
         avl_o_offset0<=o_fb_base; -- <ASYNC>
         avl_o_offset1<=o_fb_base; -- <ASYNC>
       END IF;
@@ -1501,12 +1508,7 @@ BEGIN
                 avl_i_offset1(N_AW+NB_LA-1 DOWNTO NB_LA));
             END IF;
             
-          ELSIF avl_read_sr='1' AND avl_reading='0' THEN
-            IF avl_rbib='0' THEN
-              avl_wad<=2*BLEN-1;
-            ELSE
-              avl_wad<=BLEN-1;
-            END IF;
+          ELSIF avl_read_sr='1' THEN
             avl_state<=sREAD;
             avl_read_clr<='1';
           END IF;
@@ -1531,10 +1533,10 @@ BEGIN
               avl_o_offset1(N_AW+NB_LA-1 DOWNTO NB_LA));
           END IF;  
           avl_read_i<='1';
-          avl_reading<='1';
           IF avl_read_i='1' AND avl_waitrequest='0' THEN
             avl_state<=sIDLE;
             avl_read_i<='0';
+            avl_readack<=NOT avl_readack;
           END IF;
       END CASE;
       
@@ -1545,9 +1547,12 @@ BEGIN
         avl_wr<='1';
         avl_wad<=(avl_wad+1) MOD (2*BLEN);
         IF (avl_wad MOD BLEN)=BLEN-2 THEN
-          avl_reading<='0';
-          avl_readack<=NOT avl_readack;
+          avl_readdataack<=NOT avl_readdataack;
         END IF;
+      END IF;
+
+      IF avl_o_vs_sync='0' AND avl_o_vs='1' THEN
+        avl_wad<=2*BLEN-1;
       END IF;
       
       --------------------------------------------
@@ -1632,7 +1637,7 @@ BEGIN
     ELSIF rising_edge(o_clk) THEN
       ------------------------------------------------------
       o_mode   <=mode; -- <ASYNC> ?
-      o_format <='0'&format; -- <ASYNC> ?
+      o_format <='0' & format; -- <ASYNC> ?
       
       o_run    <=run; -- <ASYNC> ?
       
@@ -1642,7 +1647,7 @@ BEGIN
       o_hdisp  <=hdisp; -- <ASYNC> ?
       o_hmin   <=hmin; -- <ASYNC> ?
       o_hmax   <=hmax; -- <ASYNC> ?
-
+      
       o_vtotal <=vtotal; -- <ASYNC> ?
       o_vsstart<=vsstart; -- <ASYNC> ?
       o_vsend  <=vsend; -- <ASYNC> ?
@@ -1686,9 +1691,9 @@ BEGIN
         o_format<=o_fb_format;
       END IF;
       
-      IF o_format(1 downto 0)="00" OR o_format(1 downto 0)="11" THEN -- 16bpp
+      IF o_format(1 DOWNTO 0)="00" OR o_format(1 DOWNTO 0)="11" THEN -- 16bpp
         o_hburst<=(o_ihsize*2 + N_BURST - 1) / N_BURST;
-      ELSIF o_format(1 downto 0)="01" THEN -- 24bpp
+      ELSIF o_format(1 DOWNTO 0)="01" THEN -- 24bpp
         o_hburst<=(o_ihsize*3 + N_BURST - 1) / N_BURST;
       ELSE -- 32bpp
         o_hburst<=(o_ihsize*4 + N_BURST - 1) / N_BURST;
@@ -1731,6 +1736,10 @@ BEGIN
       o_readack_sync2<=o_readack_sync;
       o_readack<=o_readack_sync XOR o_readack_sync2;
       
+      o_readdataack_sync<=avl_readdataack; -- <ASYNC>
+      o_readdataack_sync2<=o_readdataack_sync;
+      o_readdataack<=o_readdataack_sync XOR o_readdataack_sync2;
+      
       ------------------------------------------------------
       lev_inc_v:='0';
       lev_dec_v:='0';
@@ -1742,6 +1751,7 @@ BEGIN
       IF o_hsv(0)='1' AND o_hsv(1)='0' THEN
         IF o_vcpt_pre3=o_vmin THEN
           o_fload<=2;
+          o_bibu<='0';
         END IF;
         o_hsp<='1';
       END IF;
@@ -1805,7 +1815,6 @@ BEGIN
           prim_v:=to_std_logic(o_hbcpt=0);
           last_v:=to_std_logic(o_hbcpt=o_hburst-1);
           bib_v :=o_bibu;
-          o_bib <=o_bibu;
           o_adrsa<='1';
           
         WHEN sWAITREAD =>
@@ -1830,28 +1839,15 @@ BEGIN
       o_adrs_pre<=to_integer(o_vacpt) * o_hburst;
       o_rline<=o_vacpt(0); -- Even/Odd line for interlaced video
       IF o_adrsa='1' THEN
-        IF HEADER AND o_fb_ena='0' THEN
-          IF o_fload=2 THEN
-            o_adrs<=to_unsigned((o_hbcpt + 1) * N_BURST,32);
-            o_alt<="1111";
-          ELSIF o_fload=1 THEN
-            o_adrs<=to_unsigned((o_hburst + o_hbcpt + 1) * N_BURST,32);
-            o_alt<="0100";
-          ELSE
-            o_adrs<=to_unsigned((o_adrs_pre + o_hbcpt + 1) * N_BURST,32);
-            o_alt<=altx(o_vacpt(1 DOWNTO 0) + 1);
-          END IF;
+        IF o_fload=2 THEN
+          o_adrs<=to_unsigned(o_hbcpt * N_BURST,32);
+          o_alt<="1111";
+        ELSIF o_fload=1 THEN
+          o_adrs<=to_unsigned((o_hburst + o_hbcpt) * N_BURST,32);
+          o_alt<="0100";
         ELSE
-          IF o_fload=2 THEN
-            o_adrs<=to_unsigned(o_hbcpt * N_BURST,32);
-            o_alt<="1111";
-          ELSIF o_fload=1 THEN
-            o_adrs<=to_unsigned((o_hburst + o_hbcpt) * N_BURST,32);
-            o_alt<="0100";
-          ELSE
-            o_adrs<=to_unsigned((o_adrs_pre + o_hbcpt) * N_BURST,32);
-            o_alt<=altx(o_vacpt(1 DOWNTO 0) + 1);
-          END IF;
+          o_adrs<=to_unsigned((o_adrs_pre + o_hbcpt) * N_BURST,32);
+          o_alt<=altx(o_vacpt(1 DOWNTO 0) + 1);
         END IF;
       END IF;
       
@@ -1883,6 +1879,7 @@ BEGIN
         ELSE
           o_ad<=BLEN;
         END IF;
+        
       ELSE
         -- dshi : Force shift first two or three pixels of each line
         IF o_dshi=0  THEN
@@ -1917,11 +1914,11 @@ BEGIN
           o_last1<=o_last;
           o_last2<=o_last1;
           
-          IF shift_onext(o_acpt,o_format(1 downto 0)) THEN
+          IF shift_onext(o_acpt,o_format(1 DOWNTO 0)) THEN
             o_ad<=(o_ad+1) MOD (2*BLEN);
           END IF;
           
-          IF o_adturn='1' AND (shift_onext((o_acpt+1) MOD 16,o_format(1 downto 0))) AND
+          IF o_adturn='1' AND (shift_onext((o_acpt+1) MOD 16,o_format(1 DOWNTO 0))) AND
             (((o_ad MOD BLEN=0) AND o_lastv(0)='0') OR o_last2='1')  THEN
             o_copy<='0';
             lev_dec_v:='1';
@@ -1940,7 +1937,7 @@ BEGIN
       
       ------------------------------------------------------
       IF o_sh3='1' THEN
-        shift_v:=shift_opack(o_acpt4,o_shift,o_dr,o_format(1 downto 0));
+        shift_v:=shift_opack(o_acpt4,o_shift,o_dr,o_format(1 DOWNTO 0));
         o_shift<=shift_v;
         
         o_hpix0<=shift_opix(shift_v,o_format);
@@ -1961,17 +1958,19 @@ BEGIN
       END IF;
       
       ------------------------------------------------------
+      -- lev_inc : read start
+      -- lev_dec : end of copy
       -- READLEV : Number of ongoing Avalon Reads
-      IF lev_dec_v='1' AND lev_inc_v='0' THEN
-        o_readlev<=o_readlev-1;
-      ELSIF lev_dec_v='0' AND lev_inc_v='1' THEN
+      IF lev_dec_v='0' AND lev_inc_v='1' THEN
         o_readlev<=o_readlev+1;
+      ELSIF lev_dec_v='1' AND lev_inc_v='0' THEN
+        o_readlev<=o_readlev-1;
       END IF;
       
       -- COPYLEV : Number of ongoing copies to line buffers
-      IF lev_dec_v='1' AND o_readack='0' THEN
+      IF lev_dec_v='1' AND o_readdataack='0' THEN
         o_copylev<=o_copylev-1;
-      ELSIF lev_dec_v='0' AND o_readack='1' THEN
+      ELSIF lev_dec_v='0' AND o_readdataack='1' THEN
         o_copylev<=o_copylev+1;
       END IF;
       
