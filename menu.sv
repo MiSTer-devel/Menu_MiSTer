@@ -137,14 +137,16 @@ assign AUDIO_R = 0;
 assign AUDIO_MIX = 0;
 
 assign LED_DISK[1] = 1;
-assign LED_POWER   = 0;
+assign LED_DISK[0] = FB ? led[1] : led2;
+assign LED_POWER[1]= 1;
+assign LED_POWER[0]= FB ? led[2] : LED_USER;
 
 reg  [26:0] act_cnt;
 always @(posedge clk_sys) act_cnt <= act_cnt + 1'd1; 
-assign LED_USER    = act_cnt[26]  ? act_cnt[25:18] > act_cnt[7:0]   : act_cnt[25:18] <= act_cnt[7:0];
+assign LED_USER  = FB ? led[0] : (act_cnt[26]  ? act_cnt[25:18] > act_cnt[7:0] : act_cnt[25:18] <= act_cnt[7:0]);
 
 wire [26:0] act_cnt2 = act_cnt + 27'b100000000000000000000000000;
-assign LED_DISK[0] = act_cnt2[26] ? act_cnt2[25:18] > act_cnt2[7:0] : act_cnt2[25:18] <= act_cnt2[7:0];
+wire led2 = act_cnt2[26] ? act_cnt2[25:18] > act_cnt2[7:0] : act_cnt2[25:18] <= act_cnt2[7:0];
 
 
 localparam CONF_STR = {
@@ -247,6 +249,8 @@ end
 /////////////////////   VIDEO   ///////////////////
 
 wire PAL = status[4];
+wire FB  = status[5];
+wire [2:0] led = status[8:6];
 
 reg   [9:0] hc;
 reg   [9:0] vc;
