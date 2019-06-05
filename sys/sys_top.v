@@ -33,6 +33,7 @@ module sys_top
 	inout         VGA_HS,  // VGA_HS is secondary SD card detect when VGA_EN = 1 (inactive)
 	output		  VGA_VS,
 	input         VGA_EN,  // active low
+	output		  VGA_SOG,
 
 	/////////// AUDIO //////////
 	output		  AUDIO_L,
@@ -201,6 +202,7 @@ reg [15:0] cfg;
 
 reg  cfg_got   = 0;
 reg  cfg_set   = 0;
+wire sog       = cfg[9];
 wire hdmi_limited = cfg[8];
 wire dvi_mode  = cfg[7];
 wire audio_96k = cfg[6];
@@ -799,6 +801,7 @@ assign VGA_R  = VGA_EN ? 6'bZZZZZZ : vga_o[23:18];
 assign VGA_G  = VGA_EN ? 6'bZZZZZZ : vga_o[15:10];
 assign VGA_B  = VGA_EN ? 6'bZZZZZZ : vga_o[7:2];
 
+assign VGA_SOG = (~VGA_EN & sog) ? 1'b0 : 1'bZ;
 
 /////////////////////////  Audio output  ////////////////////////////////
 
