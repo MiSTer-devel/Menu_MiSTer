@@ -1,6 +1,6 @@
 derive_pll_clocks
 
-create_generated_clock -source [get_pins -compatibility_mode {*|pll|pll_inst|altera_pll_i|general[1].gpll~PLL_OUTPUT_COUNTER|divclk}] \
+create_generated_clock -source [get_pins -compatibility_mode {*|pll|pll_inst|altera_pll_i|*[1].*|divclk}] \
                        -name SDRAM_CLK [get_ports {SDRAM_CLK}]
 
 derive_clock_uncertainty
