@@ -136,10 +136,9 @@ assign AUDIO_L = 0;
 assign AUDIO_R = 0;
 assign AUDIO_MIX = 0;
 
-assign LED_DISK[1] = 1;
-assign LED_DISK[0] = FB ? led[1] : led2;
+assign LED_DISK = 0;
 assign LED_POWER[1]= 1;
-assign LED_POWER[0]= FB ? led[2] : LED_USER;
+assign LED_POWER[0]= FB ? led[2] : led2;
 
 reg  [26:0] act_cnt;
 always @(posedge clk_sys) act_cnt <= act_cnt + 1'd1; 
