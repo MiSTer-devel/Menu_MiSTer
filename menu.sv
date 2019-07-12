@@ -265,7 +265,7 @@ always @(posedge CLK_VIDEO) begin
 		else ce_pix <= ~ce_pix;
 
 	if(ce_pix) begin
-		if(hc == 639) begin
+		if(hc == 637) begin
 			hc <= 0;
 			if(vc == (PAL ? (forced_scandoubler ? 623 : 311) : (forced_scandoubler ? 523 : 261))) begin 
 				vc <= 0;
@@ -288,11 +288,11 @@ reg VSync;
 
 reg ce_pix;
 always @(posedge CLK_VIDEO) begin
-	if (hc == 550) HBlank <= 1;
+	if (hc == 529) HBlank <= 1;
 		else if (hc == 0) HBlank <= 0;
 
-	if (hc == 570) HSync <= 1;
-		else if (hc == 602) HSync <= 0;
+	if (hc == 544) HSync <= 1;
+		else if (hc == 590) HSync <= 0;
 
 	if(PAL) begin
 		if(vc == (forced_scandoubler ? 609 : 304)) VSync <= 1;
