@@ -149,7 +149,6 @@ wire led_locked;
 //LEDs on main board
 assign LED = (led_overtake & led_state) | (~led_overtake & {1'b0,led_locked,1'b0, ~led_p, 1'b0, ~led_d, 1'b0, ~led_u});
 
-
 reg [3:0] btnled = 3'bZZZ;
 reg btn_r = 0, btn_o = 0, btn_u = 0;
 always @(posedge FPGA_CLK2_50) begin
@@ -177,7 +176,6 @@ always @(posedge FPGA_CLK2_50) begin
 end
 
 assign BTNLED = btnled;
-
 
 reg btn_user, btn_osd;
 always @(posedge FPGA_CLK2_50) begin
@@ -434,7 +432,7 @@ always @(posedge FPGA_CLK2_50) begin
 end
 
 wire clk_100m;
-wire clk_hdmi;
+wire clk_hdmi  = ~HDMI_TX_CLK;  // Internal HDMI clock, inverted in relation to external clock
 wire clk_audio = FPGA_CLK3_50;
 wire clk_pal   = FPGA_CLK3_50;
 
@@ -508,7 +506,7 @@ ascal
 )
 ascal
 (
-	.reset_na (~reset_req),
+	.reset_na (~reset_req & ~direct_video),
 	.run      (1),
 	.freeze   (0),
 
@@ -691,13 +689,14 @@ fbpal fbpal
 
 /////////////////////////  HDMI output  /////////////////////////////////
 
+wire hdmi_tx_clk;
 pll_hdmi pll_hdmi
 (
 	.refclk(FPGA_CLK1_50),
 	.rst(reset_req),
 	.reconfig_to_pll(reconfig_to_pll),
 	.reconfig_from_pll(reconfig_from_pll),
-	.outclk_0(clk_hdmi)
+	.outclk_0(hdmi_tx_clk)
 );
 
 //1920x1080@60 PCLK=148.5MHz CEA
@@ -813,16 +812,9 @@ osd hdmi_osd
 	.osd_status(osd_status)
 );
 
-assign HDMI_TX_CLK = direct_video ? ~clk_vid : ~clk_hdmi ;
-assign HDMI_TX_HS  = direct_video ? dv_hs    : hdmi_hs   ;
-assign HDMI_TX_VS  = direct_video ? dv_vs    : hdmi_vs   ;
-assign HDMI_TX_D   = direct_video ? dv_d     : hdmi_tx_d ;
-assign HDMI_TX_DE  = direct_video ? dv_de    : hdmi_tx_de;
-
 reg [23:0] dv_d;
 reg        dv_hs, dv_vs, dv_de;
-
-always @(posedge clk_vid) begin
+always @(negedge clk_vid) begin
 	reg [23:0] dv_d1, dv_d2;
 	reg        dv_de1, dv_de2, dv_hs1, dv_hs2, dv_vs1, dv_vs2;
 	reg [12:0] vsz, vcnt;
@@ -837,7 +829,7 @@ always @(posedge clk_vid) begin
 		if(~old_hs && hs) begin
 			old_vs <= vs;
 			if(~&vcnt) vcnt <= vcnt + 1'd1;
-			if(~old_vs & vs) vsz <= vcnt;
+			if(~old_vs & vs & ~f1) vsz <= vcnt;
 			if(old_vs & ~vs) vcnt <= 0;
 			
 			if(vcnt == 1) vde <= 1;
@@ -861,6 +853,11 @@ always @(posedge clk_vid) begin
 	dv_vs  <= dv_vs2;
 end
 
+assign HDMI_TX_CLK = direct_video ? clk_vid : hdmi_tx_clk ;
+assign HDMI_TX_HS  = direct_video ? dv_hs   : hdmi_hs     ;
+assign HDMI_TX_VS  = direct_video ? dv_vs   : hdmi_vs     ;
+assign HDMI_TX_D   = direct_video ? dv_d    : hdmi_tx_d   ;
+assign HDMI_TX_DE  = direct_video ? dv_de   : hdmi_tx_de  ;
 
 /////////////////////////  VGA output  //////////////////////////////////
 
