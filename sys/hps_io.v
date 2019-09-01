@@ -94,6 +94,8 @@ module hps_io #(parameter STRLEN=0, PS2DIV=0, WIDE=0, VDNUM=1, PS2WE=0)
 	output reg [31:0] ioctl_file_ext,
 	input             ioctl_wait,
 
+	output reg [15:0] sdram_sz,     // [15]: 0 - unset, 1 - set. [1:0]: 0 - none, 1 - 32MB, 2 - 64MB, 3 - 128MB
+
 	// RTC MSM6242B layout
 	output reg [64:0] RTC,
 
@@ -488,6 +490,9 @@ always@(posedge clk_sys) begin
 					
 					//menu mask
 					'h2E: if(byte_cnt == 1) io_dout <= status_menumask;
+
+					//sdram size set
+					'h31: if(byte_cnt == 1) sdram_sz <= io_din;
 				endcase
 			end
 		end

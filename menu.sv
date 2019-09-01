@@ -166,6 +166,7 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 
 	.buttons(buttons),
 	.status(status),
+	.status_menumask(cfg),
 	
 	.ps2_key(ps2_key)
 );
@@ -212,13 +213,100 @@ sdram sdr
 	.*,
 	.init(~locked),
 	.clk(clk_sys),
-	.addr(addr[24:0]),
+	.addr(sdram_addr),
 	.wtbt(3),
-	.dout(),
-	.din(0),
-	.rd(0),
-	.ready()
+	.dout(sdram_dout),
+	.din(sdram_din),
+	.rd(sdram_rd),
+	.we(sdram_we),
+	.ready(sdram_ready)
 );
+
+reg  [26:0] sdram_addr;
+wire        sdram_ready;
+wire [15:0] sdram_dout;
+reg  [15:0] sdram_din;
+reg         sdram_we;
+reg         sdram_rd;
+reg  [15:0] cfg = 0;
+
+always @(posedge clk_sys) begin
+	reg [4:0] state = 0;
+
+	sdram_rd <= 0;
+	sdram_we <= 0;
+
+	if(RESET) begin
+		state <= 0;
+		cfg <= 0;
+	end
+	else begin
+		case(state)
+			0: if(sdram_ready) begin
+					cfg <= 0;
+					state      <= state+1'd1;
+				end
+			1: begin
+					sdram_addr <= 'h4000000;
+					sdram_din  <= 3128;
+					sdram_we   <= 1;
+					state      <= state+1'd1;
+				end
+			2: state <= state+1'd1;
+			3: if(sdram_ready) begin
+					sdram_addr <= 'h2000000;
+					sdram_din  <= 2064;
+					sdram_we   <= 1;
+					state      <= state+1'd1;
+				end
+			4: state <= state+1'd1;
+			5: if(sdram_ready) begin
+					sdram_addr <= 'h0000000;
+					sdram_din  <= 1032;
+					sdram_we   <= 1;
+					state      <= state+1'd1;
+				end
+			6: state <= state+1'd1;
+			7: if(sdram_ready) begin
+					sdram_addr <= 'h1000000;
+					sdram_din  <= 12345;
+					sdram_we   <= 1;
+					state      <= state+1'd1;
+				end
+			8: state <= state+1'd1;
+			9: if(sdram_ready) begin
+					sdram_addr <= 'h4000000;
+					sdram_rd   <= 1;
+					state      <= state+1'd1;
+				end
+			10: state <= state+1'd1;
+			11: if(sdram_ready) begin
+					cfg[2]     <= (sdram_dout == 3128);
+					sdram_addr <= 'h2000000;
+					sdram_rd   <= 1;
+					state      <= state+1'd1;
+				end
+			12: state <= state+1'd1;
+			13: if(sdram_ready) begin
+					cfg[1]     <= (sdram_dout == 2064);
+					sdram_addr <= 'h0000000;
+					sdram_rd   <= 1;
+					state      <= state+1'd1;
+				end
+			14: state <= state+1'd1;
+			15: if(sdram_ready) begin
+					cfg[0]     <= (sdram_dout == 1032);
+					cfg[15]    <= 1;
+					state      <= state+1'd1;
+				end
+			16: begin
+					sdram_addr <= addr[24:0];
+					sdram_din  <= 0;
+					sdram_we   <= we;
+				end
+		endcase
+	end
+end
 
 ddram ddr
 (
@@ -236,7 +324,7 @@ reg [28:0] addr = 0;
 always @(posedge clk_sys) begin
 	reg [4:0] cnt = 9;
 
-	if(~RESET) begin
+	if(~RESET & cfg[15]) begin
 		cnt <= cnt + 1'b1;
 		we <= &cnt;
 		if(cnt == 8) addr <= addr + 1'd1;
