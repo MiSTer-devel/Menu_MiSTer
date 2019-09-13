@@ -5,7 +5,7 @@ module lfsr(
 
 parameter N = 63;
 
-lcell lc0((rnd[N - 1] ^ rnd[N - 10]), rnd[0]);
+lcell lc0(~(rnd[N - 1] ^ rnd[N - 3] ^ rnd[N - 4] ^ rnd[N - 6] ^ rnd[N - 10]), rnd[0]);
 generate 
 	genvar i;
 	for (i = 0; i <= N - 2; i = i + 1) begin : lcn
