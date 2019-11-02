@@ -62,7 +62,7 @@ assign SDRAM_nWE  = command[0];
 assign SDRAM_CKE  = 1;
 assign {SDRAM_DQMH,SDRAM_DQML} = SDRAM_A[12:11];
 
-assign dout       = latched ? data_l : data_d;
+assign dout       = save_addr[0] ? {data[7:0],     data[15:8]}     : {data[15:8],     data[7:0]};
 
 // no burst configured
 localparam BURST_LENGTH        = 3'b000;   // 000=1, 001=2, 010=4, 011=8
@@ -91,10 +91,7 @@ reg  [2:0] command = CMD_NOP;
 reg [26:0] save_addr;
 reg        chip = 0;
 
-reg        latched;
 reg [15:0] data;
-wire[15:0] data_l = save_addr[0] ? {data[7:0],     data[15:8]}     : {data[15:8],     data[7:0]};
-wire[15:0] data_d = save_addr[0] ? {SDRAM_DQ[7:0], SDRAM_DQ[15:8]} : {SDRAM_DQ[15:8], SDRAM_DQ[7:0]};
 
 typedef enum
 {
@@ -125,9 +122,7 @@ always @(posedge clk) begin
 
 	data_ready_delay <= {1'b0, data_ready_delay[CAS_LATENCY:1]};
 
-	// make it ready 1T in advance
-	if(data_ready_delay[1]) {latched, ready} <= {1'b0, 1'b1};
-	if(data_ready_delay[0]) {latched, data}  <= {1'b1, SDRAM_DQ};
+	if(data_ready_delay[0]) {ready, data}  <= {1'b1, SDRAM_DQ};
 
 	case(state)
 		STATE_STARTUP: begin
