@@ -123,9 +123,7 @@ end
 reg  [2:0] osd_de;
 reg        osd_pixel;
 reg [21:0] v_cnt;
-
-reg v_cnt_h, v_cnt_1, v_cnt_2, v_cnt_3, v_cnt_4;
-
+reg        v_cnt_h, v_cnt_1, v_cnt_2, v_cnt_3, v_cnt_4;
 reg [21:0] v_osd_start_h, v_osd_start_1, v_osd_start_2, v_osd_start_3, v_osd_start_4, v_osd_start_5;
 reg [21:0] v_info_start_h, v_info_start_1, v_info_start_2, v_info_start_3, v_info_start_4, v_info_start_5;
 

@@ -1,7 +1,7 @@
 //============================================================================
 //
 //  Menu for MiSTer.
-//  Copyright (C) 2017-2019 Sorgelig
+//  Copyright (C) 2017-2020 Sorgelig
 //
 //
 //  This program is free software; you can redistribute it and/or modify it
@@ -153,14 +153,14 @@ wire [26:0] act_cnt2 = {~act_cnt[26],act_cnt[25:0]};
 assign LED_POWER[0]= FB ? led[2] : act_cnt2[26] ? act_cnt2[25:18] > act_cnt2[7:0] : act_cnt2[25:18] <= act_cnt2[7:0];
 
 
+`include "build_id.v" 
 localparam CONF_STR = {
-	"MENU;;"
+	"MENU;;",
+	"V,v",`BUILD_DATE 
 };
 
 wire forced_scandoubler;
-wire  [1:0] buttons;
 wire [31:0] status;
-wire [10:0] ps2_key;
 
 hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 (
@@ -170,30 +170,9 @@ hps_io #(.STRLEN($size(CONF_STR)>>3)) hps_io
 	.conf_str(CONF_STR),
 	.forced_scandoubler(forced_scandoubler),
 
-	.buttons(buttons),
 	.status(status),
-	.status_menumask(cfg),
-	
-	.ps2_key(ps2_key)
+	.status_menumask(cfg)
 );
-
-/*
-always @(posedge CLK_50M) begin
-	integer sec, to;
-	reg old_stb;
-	
-	sec <= sec + 1;
-	if(sec >= 50000000) begin
-		sec <= 0;
-		to <= to + 1;
-	end
-
-	DIM <= (to >= 120);
-
-	old_stb <= ps2_key[10];
-	if((old_stb ^ ps2_key[10]) || status[0] || buttons[1]) to <= 0;
-end
-*/
 
 ////////////////////   CLOCKS   ///////////////////
 wire locked, clk_sys;
