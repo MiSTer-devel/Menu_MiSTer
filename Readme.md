@@ -1,7 +1,7 @@
 # Startup core for MiSTer
 
 * **ESC** - switch to options
-* **F1** - switch the backgound
+* **F1** - switch the background
 * **F9** - Go to Linux terminal (F12 - back)
 
 ## Notes:
