@@ -287,7 +287,7 @@ cyclonev_hps_interface_mpu_general_purpose h2f_gp
 reg [15:0] cfg;
 
 reg        cfg_set      = 0;
-wire       vga_fb       = cfg[12];
+wire       vga_fb       = cfg[12] | vga_force_scaler;
 wire [1:0] hdmi_limited = {cfg[11],cfg[8]};
 
 `ifdef DEBUG_NOHDMI
@@ -303,7 +303,7 @@ wire       ypbpr_en     = cfg[5];
 wire       io_osd_vga   = io_ss1 & ~io_ss2;
 `ifndef DUAL_SDRAM
 	wire    sog          = cfg[9];
-	wire    vga_scaler   = cfg[2];
+	wire    vga_scaler   = cfg[2] | vga_force_scaler;
 `endif
 
 reg        cfg_custom_t = 0;
@@ -316,7 +316,7 @@ reg  [6:0] coef_addr;
 reg  [8:0] coef_data;
 reg        coef_wr = 0;
 
-wire [7:0] ARX, ARY;
+wire[11:0] ARX, ARY;
 reg [11:0] VSET = 0, HSET = 0;
 reg        FREESCALE = 0;
 reg  [2:0] scaler_flt;
@@ -337,6 +337,10 @@ reg [23:0] acy0 = -24'd6216759;
 reg [23:0] acy1 =  24'd6143386;
 reg [23:0] acy2 = -24'd2023767;
 reg        areset = 0;
+reg [11:0] arc1x = 0;
+reg [11:0] arc1y = 0;
+reg [11:0] arc2x = 0;
+reg [11:0] arc2y = 0;
 
 always@(posedge clk_sys) begin
 	reg  [7:0] cmd;
@@ -453,6 +457,15 @@ always@(posedge clk_sys) begin
 					12: acy1[23:16]      <= io_din[7:0];
 					13: acy2[15:0]       <= io_din;
 					14: acy2[23:16]      <= io_din[7:0];
+				endcase
+			end
+			if(cmd == 'h3A) begin
+				cnt <= cnt + 1'd1;
+				case(cnt[3:0])
+					 0: arc1x <= io_din[11:0];
+					 1: arc1y <= io_din[11:0];
+					 2: arc2x <= io_din[11:0];
+					 3: arc2y <= io_din[11:0];
 				endcase
 			end
 		end
@@ -778,9 +791,30 @@ always @(posedge clk_vid) begin
 	reg [11:0] videoh;
 	reg [11:0] height;
 	reg [11:0] width;
+	reg [11:0] arx;
+	reg [11:0] ary;
 
 	height <= (VSET && (VSET < HEIGHT)) ? VSET : HEIGHT;
 	width  <= (HSET && (HSET < WIDTH))  ? HSET : WIDTH;
+	
+	if(!ARY) begin
+		if(ARX == 1) begin
+			arx <= arc1x;
+			ary <= arc1y;
+		end
+		else if(ARX == 2) begin
+			arx <= arc2x;
+			ary <= arc2y;
+		end
+		else begin
+			arx <= 0;
+			ary <= 0;
+		end
+	end
+	else begin
+		arx <= ARX;
+		ary <= ARY;
+	end
 
 	state <= state + 1'd1;
 	case(state)
@@ -791,18 +825,20 @@ always @(posedge clk_vid) begin
 				vmax <= LFB_VMAX;
 				state<= 0;
 			end
-			else if(ARX && ARY && !FREESCALE) begin
-				wcalc <= (height*ARX)/ARY;
-				hcalc <= (width*ARY)/ARX;
-			end
-			else begin
+			else if(FREESCALE || !arx || !ary) begin
 				wcalc <= width;
 				hcalc <= height;
 			end
+			else begin
+				wcalc <= (height*arx)/ary;
+				hcalc <= (width*ary)/arx;
+			end
+
 		6: begin
 				videow <= (wcalc > width)  ? width  : wcalc[11:0];
 				videoh <= (hcalc > height) ? height : hcalc[11:0];
 			end
+
 		7: begin
 				hmin <= ((WIDTH  - videow)>>1);
 				hmax <= ((WIDTH  - videow)>>1) + videow - 1'd1;
@@ -1174,24 +1210,45 @@ wire vga_cs_osd;
 csync csync_vga(clk_vid, vga_hs_osd, vga_vs_osd, vga_cs_osd);
 
 `ifndef DUAL_SDRAM
-	wire [23:0] vga_o;
-	vga_out vga_out
+	wire [23:0] vgas_o;
+	wire vgas_hs, vgas_vs, vgas_cs;
+	vga_out vga_scaler_out
 	(
-		.ypbpr_full(0),
+		.clk(clk_hdmi),
 		.ypbpr_en(ypbpr_en),
-		.dout(vga_o),
-		.din((vga_fb | vga_scaler) ? {24{hdmi_de_osd}} & hdmi_data_osd : vga_data_osd)
+		.hsync(hdmi_hs_osd),
+		.vsync(hdmi_vs_osd),
+		.csync(hdmi_cs_osd),
+		.dout(vgas_o),
+		.din({24{hdmi_de_osd}} & hdmi_data_osd),
+		.hsync_o(vgas_hs),
+		.vsync_o(vgas_vs),
+		.csync_o(vgas_cs)
 	);
 
-	wire vs1 = (vga_fb | vga_scaler) ? hdmi_vs_osd : vga_vs_osd;
-	wire hs1 = (vga_fb | vga_scaler) ? hdmi_hs_osd : vga_hs_osd;
-	wire cs1 = (vga_fb | vga_scaler) ? hdmi_cs_osd : vga_cs_osd;
+	wire [23:0] vga_o;
+	wire vga_hs, vga_vs, vga_cs;
+	vga_out vga_out
+	(
+		.clk(clk_vid),
+		.ypbpr_en(ypbpr_en),
+		.hsync(vga_hs_osd),
+		.vsync(vga_vs_osd),
+		.csync(vga_cs_osd),
+		.dout(vga_o),
+		.din(vga_data_osd),
+		.hsync_o(vga_hs),
+		.vsync_o(vga_vs),
+		.csync_o(vga_cs)
+	);
 
-	assign VGA_VS = (VGA_EN | SW[3]) ? 1'bZ      : csync_en ? 1'b1 : ~vs1;
-	assign VGA_HS = (VGA_EN | SW[3]) ? 1'bZ      : csync_en ? ~cs1 : ~hs1;
-	assign VGA_R  = (VGA_EN | SW[3]) ? 6'bZZZZZZ : vga_o[23:18];
-	assign VGA_G  = (VGA_EN | SW[3]) ? 6'bZZZZZZ : vga_o[15:10];
-	assign VGA_B  = (VGA_EN | SW[3]) ? 6'bZZZZZZ : vga_o[7:2];
+	wire cs1 = (vga_fb | vga_scaler) ? vgas_cs : vga_cs;
+
+	assign VGA_VS = (VGA_EN | SW[3]) ? 1'bZ      : ((vga_fb | vga_scaler) ? ~vgas_vs : ~vga_vs) | csync_en;
+	assign VGA_HS = (VGA_EN | SW[3]) ? 1'bZ      :  (vga_fb | vga_scaler) ? (csync_en ? ~vgas_cs : ~vgas_hs) : (csync_en ? ~vga_cs : ~vga_hs);
+	assign VGA_R  = (VGA_EN | SW[3]) ? 6'bZZZZZZ :  (vga_fb | vga_scaler) ? vgas_o[23:18] : vga_o[23:18];
+	assign VGA_G  = (VGA_EN | SW[3]) ? 6'bZZZZZZ :  (vga_fb | vga_scaler) ? vgas_o[15:10] : vga_o[15:10];
+	assign VGA_B  = (VGA_EN | SW[3]) ? 6'bZZZZZZ :  (vga_fb | vga_scaler) ? vgas_o[7:2]   : vga_o[7:2]  ;
 `endif
 
 reg video_sync = 0;
@@ -1335,6 +1392,7 @@ wire  [7:0] r_out, g_out, b_out, hr_out, hg_out, hb_out;
 wire        vs_fix, hs_fix, de_emu, vs_emu, hs_emu, f1;
 wire        hvs_fix, hhs_fix, hde_emu;
 wire        clk_vid, ce_pix, clk_ihdmi, ce_hpix;
+wire        vga_force_scaler;
 
 `ifdef USE_DDRAM
 	wire        ram_clk;
@@ -1422,6 +1480,7 @@ emu emu
 	.VGA_VS(vs_emu),
 	.VGA_DE(de_emu),
 	.VGA_F1(f1),
+	.VGA_SCALER(vga_force_scaler),
 
 	.CLK_VIDEO(clk_vid),
 	.CE_PIXEL(ce_pix),
