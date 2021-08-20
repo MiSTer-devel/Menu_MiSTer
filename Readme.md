@@ -1,8 +1,11 @@
 # Startup core for MiSTer
 
-* **ESC** - switch to options
-* **F1** - switch the background
+* **ESC** - Back/Options
+* **Enter** - OK
+* **F1** - Cycle Background/Wallpaper
 * **F9** - Go to Linux terminal (F12 - back)
+* **F11** - Bluetooth Pairing Script
+* **F12** - Recent Cores
 
 ## Notes:
 * Core supports sub-folders started with _ character.
