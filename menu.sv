@@ -174,8 +174,7 @@ module emu
 );
 
 assign ADC_BUS  = 'Z;
-assign USER_OUT = '1;
-assign {UART_RTS, UART_TXD, UART_DTR} = 0;
+assign {UART_RTS, UART_DTR} = 0;
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 
 assign DDRAM_CLK = clk_sys;
@@ -187,9 +186,6 @@ assign VIDEO_ARX = 0;
 assign VIDEO_ARY = 0;
 assign VGA_SCALER= 0;
 
-assign AUDIO_S = 0;
-assign AUDIO_L = 0;
-assign AUDIO_R = 0;
 assign AUDIO_MIX = 0;
 
 assign LED_DISK = 0;
@@ -206,7 +202,7 @@ assign LED_POWER[0]= FB ? led[2] : act_cnt2[26] ? act_cnt2[25:18] > act_cnt2[7:0
 
 `include "build_id.v" 
 localparam CONF_STR = {
-	"MENU;;",
+	"MENU;UART31250,MIDI;",
 	"V,v",`BUILD_DATE 
 };
 
@@ -366,6 +362,110 @@ always @(posedge clk_sys) begin
 	end
 end
 
+////////////////////////////  MT32pi  ////////////////////////////////// 
+
+//
+// Pin | USB Name | Signal
+// ----+----------+--------------
+// 0   | D+       | I/O I2C_SDA / RX (midi in)
+// 1   | D-       | O   TX (midi out)
+// 2   | TX-      | I   I2S_WS (1 == right)
+// 3   | GND_d    | I   I2C_SCL
+// 4   | RX+      | I   I2S_BCLK
+// 5   | RX-      | I   I2S_DAT
+// 6   | TX+      | -   none
+//
+
+reg [15:0] mt32_i2s_r, mt32_i2s_l;
+wire midi_rx;
+
+assign AUDIO_L = mt32_i2s_l;
+assign AUDIO_R = mt32_i2s_r;
+assign AUDIO_S = 1;
+
+assign USER_OUT[0]   = 1;
+assign USER_OUT[1]   = UART_RXD;
+assign USER_OUT[6:2] = '1;
+assign UART_TXD      = midi_rx;
+
+
+//
+// crossed/straight cable selection
+//
+
+generate
+genvar i;
+for(i = 0; i<2; i++) begin : clk_rate
+	wire clk_in = i ? USER_IN[6] : USER_IN[4];
+	reg [4:0] cnt;
+	always @(posedge CLK_AUDIO) begin : clkr
+		reg       clk_sr, clk, old_clk;
+		reg [4:0] cnt_tmp;
+
+		clk_sr <= clk_in;
+		if (clk_sr == clk_in) clk <= clk_sr;
+
+		if(~&cnt_tmp) cnt_tmp <= cnt_tmp + 1'd1;
+		else cnt <= '1;
+
+		old_clk <= clk;
+		if(~old_clk & clk) begin
+			cnt <= cnt_tmp;
+			cnt_tmp <= 0;
+		end
+	end
+end
+
+reg crossed;
+always @(posedge CLK_AUDIO) crossed <= (clk_rate[0].cnt <= clk_rate[1].cnt);
+endgenerate
+
+wire   i2s_ws   = crossed ? USER_IN[2] : USER_IN[5];
+wire   i2s_data = crossed ? USER_IN[5] : USER_IN[2];
+wire   i2s_bclk = crossed ? USER_IN[4] : USER_IN[6];
+assign midi_rx  = crossed ? USER_IN[6] : USER_IN[4];
+
+always @(posedge CLK_AUDIO) begin : i2s_proc
+	reg [15:0] i2s_buf = 0;
+	reg  [4:0] i2s_cnt = 0;
+	reg        clk_sr;
+	reg        i2s_clk = 0;
+	reg        old_clk, old_ws;
+	reg        i2s_next = 0;
+
+	// Debounce clock
+	clk_sr <= i2s_bclk;
+	if (clk_sr == i2s_bclk) i2s_clk <= clk_sr;
+
+	// Latch data and ws on rising edge
+	old_clk <= i2s_clk;
+	if (i2s_clk && ~old_clk) begin
+
+		if (~i2s_cnt[4]) begin
+			i2s_cnt <= i2s_cnt + 1'd1;
+			i2s_buf[~i2s_cnt[3:0]] <= i2s_data;
+		end
+
+		// Word Select will change 1 clock before the new word starts
+		old_ws <= i2s_ws;
+		if (old_ws != i2s_ws) i2s_next <= 1;
+	end
+
+	if (i2s_next) begin
+		i2s_next <= 0;
+		i2s_cnt <= 0;
+		i2s_buf <= 0;
+
+		if (i2s_ws) mt32_i2s_l <= i2s_buf;
+		else        mt32_i2s_r <= i2s_buf;
+	end
+	
+	if (RESET) begin
+		i2s_buf    <= 0;
+		mt32_i2s_l <= 0;
+		mt32_i2s_r <= 0;
+	end
+end
 
 /////////////////////   VIDEO   ///////////////////
 
