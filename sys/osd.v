@@ -72,7 +72,7 @@ always@(posedge clk_sys) begin
 				// command 0x40: OSDCMDENABLE, OSDCMDDISABLE
 				if(io_din[7:4] == 4) begin
 					if(!io_din[0]) {osd_status,highres} <= 0;
-					else {osd_status,info} <= {~io_din[2],io_din[2]};
+					else {osd_status,info} <= {~io_din[2] & ~io_din[3],io_din[2]};
 					bcnt  <= 0;
 				end
 				// command 0x20: OSDCMDWRITE
@@ -131,7 +131,7 @@ wire [21:0] osd_h_hdr = (info || rot) ? osd_h : (osd_h + OSD_HDR);
 
 // pipeline the comparisons a bit
 always @(posedge clk_video) if(ce_pix) begin
-	v_cnt_h <= v_cnt < osd_t;
+	v_cnt_h <= v_cnt <= osd_t;
 	v_cnt_1 <= v_cnt < 320;
 	v_cnt_2 <= v_cnt < 640;
 	v_cnt_3 <= v_cnt < 960;
