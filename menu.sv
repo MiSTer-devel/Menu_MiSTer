@@ -471,6 +471,8 @@ end
 
 /////////////////////   VIDEO   ///////////////////
 
+localparam lfsr_n = 115;
+
 wire PAL = status[4];
 wire FB  = status[5];
 wire [2:0] led = status[8:6];
@@ -478,12 +480,13 @@ wire [2:0] led = status[8:6];
 reg   [9:0] hc;
 reg   [9:0] vc;
 reg   [9:0] vvc;
-reg  [63:0] rnd_reg;
+
+reg  [lfsr_n:0] rnd_reg;
+wire [lfsr_n:0] rnd;
 
 wire  [5:0] rnd_c = {rnd_reg[0],rnd_reg[1],rnd_reg[2],rnd_reg[2],rnd_reg[2],rnd_reg[2]};
-wire [63:0] rnd;
 
-lfsr random(rnd);
+lfsr #(lfsr_n) random(rnd);
 
 always @(posedge CLK_VIDEO) begin
 	if(forced_scandoubler) ce_pix <= 1;
