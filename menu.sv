@@ -471,7 +471,7 @@ end
 
 /////////////////////   VIDEO   ///////////////////
 
-localparam lfsr_n = 115;
+localparam lfsr_n = 63;
 
 wire PAL = status[4];
 wire FB  = status[5];
