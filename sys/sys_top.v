@@ -183,10 +183,10 @@ wire io_dig = mcp_en ? mcp_mode : SW[3];
 	assign LED_USER  = VGA_TX_CLK;
 	wire   BTN_DIS   = VGA_EN;
 `else
-	wire   BTN_RESET = SDRAM2_DQ[9];
-	wire   BTN_OSD   = SDRAM2_DQ[13];
-	wire   BTN_USER  = SDRAM2_DQ[11];
-	wire   BTN_DIS   = SDRAM2_DQ[15];
+	wire   BTN_RESET = 1'b1;
+	wire   BTN_OSD   = 1'b1;
+	wire   BTN_USER  = 1'b1;
+	wire   BTN_DIS   = 1'b1;
 `endif
 
 reg BTN_EN = 0;
@@ -331,6 +331,7 @@ reg [11:0] vs_line = 0;
 
 reg        scaler_out = 0;
 reg        vrr_mode = 0;
+wire       hdmi_blackout;
 
 reg [31:0] aflt_rate = 7056000;
 reg [39:0] acx  = 4258969;
@@ -752,6 +753,7 @@ wire         freeze;
 		.vmax     (vmax),
 		.vrr      (vrr_mode),
 		.vrrmax   (HEIGHT + VBP + VS[11:0] + 12'd1),
+		.swblack  (hdmi_blackout),
 
 		.mode     ({~lowlat,LFB_EN ? LFB_FLT : |scaler_flt,2'b00}),
 		.poly_clk (clk_sys),
@@ -1734,6 +1736,7 @@ emu emu
 	.HDMI_WIDTH(direct_video ? 12'd0 : hdmi_width),
 	.HDMI_HEIGHT(direct_video ? 12'd0 : hdmi_height),
 	.HDMI_FREEZE(freeze),
+	.HDMI_BLACKOUT(hdmi_blackout),
 
 	.CLK_VIDEO(clk_vid),
 	.CE_PIXEL(ce_pix),
