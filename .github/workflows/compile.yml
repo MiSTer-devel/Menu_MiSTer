@@ -1,0 +1,50 @@
+name: Compile MiSTer Core
+
+on:
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        
+      - name: Compile Core and Rename Artifact
+        run: |
+          REPO_FULL_NAME="${{ github.repository }}"
+          REPO_BASE_NAME=$(basename $REPO_FULL_NAME)
+          
+          CORE_NAME=$(echo "$REPO_BASE_NAME" | sed 's/_MiSTer$//')
+          DATE_TAG=$(date +%Y%m%d)
+          FINAL_RBF_NAME="${CORE_NAME}_${DATE_TAG}.rbf"
+
+          echo "Starting Docker compilation using raetro/quartus:17.0..."
+          
+          PROJECT=$(find . -maxdepth 1 -name "*.qpf" | head -n 1)
+          if [ -z "$PROJECT" ]; then
+            echo "::error::No .qpf file found! Make sure the project file exists."
+            exit 1
+          fi
+          echo "Compiling project: $PROJECT"
+          
+          docker run -v "$(pwd)":/build raetro/quartus:17.0 quartus_sh --flow compile /build/"$PROJECT"
+          
+          COMPILED_RBF=$(find output_files -name "*.rbf" | head -n 1)
+          if [ -z "$COMPILED_RBF" ]; then
+            echo "::error::RBF file not found after compilation."
+            exit 1
+          fi
+          
+          # fix permission
+          sudo mv "$COMPILED_RBF" "output_files/$FINAL_RBF_NAME"
+          echo "Renamed RBF to: $FINAL_RBF_NAME"
+          
+          echo "FINAL_RBF_PATH=output_files/$FINAL_RBF_NAME" >> $GITHUB_ENV
+
+      - name: Upload .rbf Release
+        uses: actions/upload-artifact@v4
+        with:
+          name: Compiled-Core
+          path: ${{ env.FINAL_RBF_PATH }}
