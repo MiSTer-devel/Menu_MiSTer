@@ -345,7 +345,7 @@ always @(posedge CLK_VIDEO) begin
 		else ce_pix <= ~ce_pix;
 
 	if(ce_pix) begin
-		if(hc == 637) begin
+		if(hc == (PAL ? 799 : 793)) begin
 			hc <= 0;
 			if(vc == (PAL ? (forced_scandoubler ? 623 : 311) : (forced_scandoubler ? 523 : 261))) begin 
 				vc <= 0;
@@ -368,29 +368,29 @@ reg VSync;
 
 reg ce_pix;
 always @(posedge CLK_VIDEO) begin
-	if (hc == 529) HBlank <= 1;
+	if (hc == 640) HBlank <= 1;
 		else if (hc == 0) HBlank <= 0;
 
-	if (hc == 544) begin
+	if (hc == 672) begin
 		HSync <= 1;
 
 		if(PAL) begin
-			if(vc == (forced_scandoubler ? 609 : 304)) VSync <= 1;
-				else if (vc == (forced_scandoubler ? 617 : 308)) VSync <= 0;
+			if(vc == (forced_scandoubler ? 582 : 291)) VSync <= 1;
+				else if (vc == (forced_scandoubler ? 588 : 294)) VSync <= 0;
 
-			if(vc == (forced_scandoubler ? 601 : 300)) VBlank <= 1;
+			if(vc == (forced_scandoubler ? 576 : 288)) VBlank <= 1;
 				else if (vc == 0) VBlank <= 0;
 		end
 		else begin
-			if(vc == (forced_scandoubler ? 490 : 245)) VSync <= 1;
-				else if (vc == (forced_scandoubler ? 496 : 248)) VSync <= 0;
+			if(vc == (forced_scandoubler ? 486 : 243)) VSync <= 1;
+				else if (vc == (forced_scandoubler ? 492 : 246)) VSync <= 0;
 
 			if(vc == (forced_scandoubler ? 480 : 240)) VBlank <= 1;
 				else if (vc == 0) VBlank <= 0;
 		end
 	end
 	
-	if (hc == 590) HSync <= 0;
+	if (hc == 736) HSync <= 0;
 end
 
 reg  [7:0] cos_out;
