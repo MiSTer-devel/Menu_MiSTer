@@ -193,10 +193,22 @@ always @(posedge clk_sys) begin
 	end
 end
 
+reg         fb_own = 0;
+wire        ddr_pause = FB | fb_own;
+wire [28:0] clr_addr, fb_addr;
+wire  [7:0] clr_burst, clr_be, fb_burst;
+wire        clr_rd, clr_we, fb_rd, fb_idle;
+
 ddram ddr
 (
 	.*,
 	.reset(RESET),
+	.DDRAM_BURSTCNT(clr_burst),
+	.DDRAM_ADDR(clr_addr),
+	.DDRAM_RD(clr_rd),
+	.DDRAM_BE(clr_be),
+	.DDRAM_WE(clr_we),
+	.we(we & ~ddr_pause),
    .dout(),
    .din(0),
    .rd(0),
@@ -209,12 +221,26 @@ reg [28:0] addr = 0;
 always @(posedge clk_sys) begin
 	reg [4:0] cnt = 9;
 
-	if(~RESET & cfg[15]) begin
+	if(~RESET & cfg[15] & ~ddr_pause) begin
 		cnt <= cnt + 1'b1;
 		we <= &cnt;
 		if(cnt == 8) addr <= addr + 1'd1;
 	end
 end
+
+always @(posedge clk_sys) begin
+	reg fb_req;
+
+	fb_req <= FB;
+	if(fb_req & ~clr_we) fb_own <= 1;
+	else if(~fb_req & fb_idle) fb_own <= 0;
+end
+
+assign DDRAM_ADDR     = fb_own ? fb_addr  : clr_addr;
+assign DDRAM_BURSTCNT = fb_own ? fb_burst : clr_burst;
+assign DDRAM_RD       = fb_own ? fb_rd    : clr_rd;
+assign DDRAM_WE       = fb_own ? 1'b0     : clr_we;
+assign DDRAM_BE       = fb_own ? 8'hFF    : clr_be;
 
 ////////////////////////////  MT32pi  ////////////////////////////////// 
 
@@ -345,7 +371,7 @@ always @(posedge CLK_VIDEO) begin
 		else ce_pix <= ~ce_pix;
 
 	if(ce_pix) begin
-		if(hc == 637) begin
+		if(hc == (PAL ? 799 : 793)) begin
 			hc <= 0;
 			if(vc == (PAL ? (forced_scandoubler ? 623 : 311) : (forced_scandoubler ? 523 : 261))) begin 
 				vc <= 0;
@@ -368,29 +394,29 @@ reg VSync;
 
 reg ce_pix;
 always @(posedge CLK_VIDEO) begin
-	if (hc == 529) HBlank <= 1;
+	if (hc == 640) HBlank <= 1;
 		else if (hc == 0) HBlank <= 0;
 
-	if (hc == 544) begin
+	if (hc == 672) begin
 		HSync <= 1;
 
 		if(PAL) begin
-			if(vc == (forced_scandoubler ? 609 : 304)) VSync <= 1;
-				else if (vc == (forced_scandoubler ? 617 : 308)) VSync <= 0;
+			if(vc == (forced_scandoubler ? 582 : 291)) VSync <= 1;
+				else if (vc == (forced_scandoubler ? 588 : 294)) VSync <= 0;
 
-			if(vc == (forced_scandoubler ? 601 : 300)) VBlank <= 1;
+			if(vc == (forced_scandoubler ? 576 : 288)) VBlank <= 1;
 				else if (vc == 0) VBlank <= 0;
 		end
 		else begin
-			if(vc == (forced_scandoubler ? 490 : 245)) VSync <= 1;
-				else if (vc == (forced_scandoubler ? 496 : 248)) VSync <= 0;
+			if(vc == (forced_scandoubler ? 486 : 243)) VSync <= 1;
+				else if (vc == (forced_scandoubler ? 492 : 246)) VSync <= 0;
 
 			if(vc == (forced_scandoubler ? 480 : 240)) VBlank <= 1;
 				else if (vc == 0) VBlank <= 0;
 		end
 	end
 	
-	if (hc == 590) HSync <= 0;
+	if (hc == 736) HSync <= 0;
 end
 
 reg  [7:0] cos_out;
@@ -399,11 +425,45 @@ cos cos(vvc + {vc>>forced_scandoubler, 2'b00}, cos_out);
 
 wire [7:0] comp_v = (cos_g >= rnd_c) ? {cos_g - rnd_c, 2'b00} : 8'd0;
 
-assign VGA_DE  = ~(HBlank | VBlank);
-assign VGA_HS  = HSync;
-assign VGA_VS  = VSync;
-assign VGA_G   = comp_v;
-assign VGA_R   = comp_v;
-assign VGA_B   = comp_v;
+wire [23:0] fb_rgb;
+wire        fb_active;
+
+console_out console_out
+(
+	.clk_sys(clk_sys),
+	.ddr_grant(fb_own),
+	.ddr_addr(fb_addr),
+	.ddr_burst(fb_burst),
+	.ddr_rd(fb_rd),
+	.ddr_busy(DDRAM_BUSY),
+	.ddr_dout(DDRAM_DOUT),
+	.ddr_dout_ready(DDRAM_DOUT_READY),
+	.ddr_idle(fb_idle),
+
+	.fb_fmt(LFB_FMT),
+	.fb_base(LFB_BASE),
+	.fb_width(LFB_WIDTH),
+	.fb_height(LFB_HEIGHT),
+	.fb_stride(LFB_STRIDE),
+
+	.clk_vid(CLK_VIDEO),
+	.ce_pix(ce_pix),
+	.show(FB),
+	.hc(hc),
+	.vc(vc),
+	.height(PAL ? (forced_scandoubler ? 10'd576 : 10'd288) : (forced_scandoubler ? 10'd480 : 10'd240)),
+	.rgb(fb_rgb),
+	.active(fb_active)
+);
+
+reg [2:0] sync;
+always @(posedge CLK_VIDEO) sync <= {~(HBlank | VBlank), HSync, VSync};
+
+assign VGA_DE  = sync[2];
+assign VGA_HS  = sync[1];
+assign VGA_VS  = sync[0];
+assign VGA_R   = fb_active ? fb_rgb[23:16] : comp_v;
+assign VGA_G   = fb_active ? fb_rgb[15:8]  : comp_v;
+assign VGA_B   = fb_active ? fb_rgb[7:0]   : comp_v;
 
 endmodule
