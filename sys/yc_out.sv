@@ -120,23 +120,21 @@ wire [7:0] chroma = phase[4].c[7:0];
 // so it matches the C/Y sample captured by Y and C below.
 wire data_de = de_dly6;
 
-// Y/C luma keeps full range. North American NTSC applies 7.5 IRE setup
-// during active video only, so blanking is not lifted with the black level.
+// Keep the separate Y/C luma level identical for PAL and NTSC.
 wire [7:0] luma_raw = luma_d4;
 
-wire [15:0] luma_setup_scaled =
-	{luma_raw, 8'd0} -
-	{4'd0, luma_raw, 4'd0} -
-	{7'd0, luma_raw, 1'd0} -
-	{8'd0, luma_raw};
+// Disabled 7.5 IRE setup scaling, retained here for reference.
+// wire [15:0] luma_setup_scaled =
+// 	{luma_raw, 8'd0} -
+// 	{4'd0, luma_raw, 4'd0} -
+// 	{7'd0, luma_raw, 1'd0} -
+// 	{8'd0, luma_raw};
+// wire [7:0] yc_luma_setup = luma_setup_scaled[15:8] + 8'd19;
 
-wire [7:0] yc_luma_setup = luma_setup_scaled[15:8] + 8'd19;
-
-wire [7:0] yc_luma =
-	data_de ? (PAL_EN ? luma_raw : yc_luma_setup) : 8'd0;
+wire [7:0] yc_luma = data_de ? luma_raw : 8'd0;
 
 // CVBS intentionally keeps the original mixer behavior from the legacy module.
-// The Y/C path below still applies the newer setup and chroma gating changes.
+// The Y/C path below still applies the newer chroma gating changes.
 wire [7:0] cvbs_out = {1'b0, luma_raw[7:1]} + {1'b0, chroma[7:1]};
 
 /**************************************
