@@ -80,6 +80,8 @@ reg [63:0] bdata;
 
 assign ddr_idle = ~fetch & ~|start & ~ddr_rd;
 
+wire [9:0] colsp1 = cols + 1'd1;
+
 always @(posedge clk_sys) begin
 	reg [31:0] laddr;
 
@@ -114,7 +116,7 @@ always @(posedge clk_sys) begin
 				ddr_addr <= laddr[31:3];
 				wbank    <= bank;
 				waddr    <= 0;
-				words    <= (cols + 1'd1) >> 1;
+				words    <= colsp1[9:1];
 				fetch    <= 1;
 				start    <= 0;
 			end
