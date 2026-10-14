@@ -366,9 +366,11 @@ wire  [5:0] rnd_c = {rnd_reg[0],rnd_reg[1],rnd_reg[2],rnd_reg[2],rnd_reg[2],rnd_
 
 lfsr #(lfsr_n) random(rnd);
 
+reg [2:0] ce_cnt;
+
 always @(posedge CLK_VIDEO) begin
-	if(forced_scandoubler) ce_pix <= 1;
-		else ce_pix <= ~ce_pix;
+	ce_cnt <= ce_cnt + 1'd1;
+	ce_pix <= forced_scandoubler ? ~|ce_cnt[1:0] : ~|ce_cnt;
 
 	if(ce_pix) begin
 		if(hc == (PAL ? 799 : 793)) begin
